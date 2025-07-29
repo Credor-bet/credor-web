@@ -8,27 +8,27 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { 
   TrendingUp, 
-  Users, 
+  // Users, // Removed unused import
   Trophy,
   DollarSign,
   Target,
-  Clock,
+  // Clock, // Removed unused import
   Zap,
   Eye
 } from 'lucide-react'
-import { formatCurrency, formatDate, getBetStatusColor } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const { user, wallet, refreshUser, refreshWallet } = useAuthStore()
   
   // Defensive Zustand store access
-  const bettingStore = typeof useBettingStore === "function" ? useBettingStore() : {};
+  const bettingStore = useBettingStore();
   const activeBets = Array.isArray(bettingStore?.activeBets) ? bettingStore.activeBets : [];
   const refreshBets = bettingStore?.refreshBets;
 
   // Helper function to get bet indicator
-  const getBetIndicator = (bet: any) => {
+  const getBetIndicator = (bet: { creator_id: string; opponent_id: string; status: string }) => {
     const isCreator = bet.creator_id === user?.id
     const isOpponent = bet.opponent_id === user?.id
     
@@ -45,7 +45,7 @@ export default function DashboardPage() {
   }
 
   // Helper function to get bet role
-  const getBetRole = (bet: any) => {
+  const getBetRole = (bet: { creator_id: string; opponent_id: string }) => {
     if (bet.creator_id === user?.id) return 'Creator'
     if (bet.opponent_id === user?.id) return 'Opponent'
     return 'Participant'
@@ -210,7 +210,7 @@ export default function DashboardPage() {
               <Zap className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="font-medium mb-2">Trending Bets</p>
               <p className="text-sm">This feature is coming soon!</p>
-              <p className="text-xs mt-2">You'll be able to see popular bets and trending matches here.</p>
+              <p className="text-xs mt-2">You&apos;ll be able to see popular bets and trending matches here.</p>
             </div>
           </CardContent>
         </Card>

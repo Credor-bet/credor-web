@@ -17,7 +17,7 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
+  // const router = useRouter() // Removed unused router
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,7 +37,7 @@ export default function SignInPage() {
         // Force a hard refresh to ensure the session is properly set
         window.location.href = '/dashboard'
       }
-    } catch (error) {
+    } catch (err) {
       setError('An unexpected error occurred')
       setIsLoading(false)
     }
@@ -59,7 +59,7 @@ export default function SignInPage() {
         setError(error.message)
         setIsLoading(false)
       }
-    } catch (error) {
+    } catch (err) {
       setError('An unexpected error occurred')
       setIsLoading(false)
     }
@@ -174,7 +174,7 @@ export default function SignInPage() {
 
         <div className="text-center text-sm">
           <Link href="/signup" className="text-blue-600 hover:underline">
-            Don't have an account? Sign up
+            Don&apos;t have an account? Sign up
           </Link>
         </div>
         

@@ -21,7 +21,7 @@ export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const router = useRouter()
+  // const router = useRouter() // Removed unused router
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,7 +57,7 @@ export default function SignUpPage() {
       } else {
         setMessage('Check your email for a confirmation link!')
       }
-    } catch (error) {
+    } catch (err) {
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)
@@ -79,7 +79,7 @@ export default function SignUpPage() {
       if (error) {
         setError(error.message)
       }
-    } catch (error) {
+    } catch (err) {
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)

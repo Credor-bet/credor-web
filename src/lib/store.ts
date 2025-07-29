@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from './supabase'
-import type { Tables } from './supabase'
+// import type { Tables } from './supabase' // Removed unused import
 
 interface User {
   id: string
@@ -291,7 +291,7 @@ interface FriendsActions {
 
 type FriendsStore = FriendsState & FriendsActions
 
-export const useFriendsStore = create<FriendsStore>((set, get) => ({
+export const useFriendsStore = create<FriendsStore>((set) => ({
   friends: [],
   friendRequests: [],
   isLoadingFriends: false,

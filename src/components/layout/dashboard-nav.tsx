@@ -16,8 +16,8 @@ import {
   LogOut, 
   Menu, 
   X,
-  Trophy,
-  TrendingUp
+  Trophy
+  // TrendingUp // Removed unused import
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

@@ -12,15 +12,17 @@ import {
   Users, 
   Trophy,
   DollarSign,
-  Calendar,
   Target
 } from 'lucide-react'
-import { formatCurrency, formatDate, getBetStatusColor, getMatchOutcomeText } from '@/lib/utils'
+import { formatCurrency, formatDate, getBetStatusColor } from '@/lib/utils'
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const { user, wallet, refreshUser, refreshWallet } = useAuthStore()
-  const { activeBets, refreshBets } = useBettingStore()
+  // Defensive: in case useBettingStore returns undefined or activeBets is not an array
+  const bettingStore = typeof useBettingStore === "function" ? useBettingStore() : {};
+  const activeBets = Array.isArray(bettingStore?.activeBets) ? bettingStore.activeBets : [];
+  const refreshBets = bettingStore?.refreshBets;
 
   useEffect(() => {
     const loadData = async () => {
@@ -28,7 +30,7 @@ export default function DashboardPage() {
         await Promise.all([
           refreshUser(),
           refreshWallet(),
-          refreshBets()
+          refreshBets?.()
         ])
       } catch (error) {
         console.error('Error loading dashboard data:', error)
@@ -89,7 +91,7 @@ export default function DashboardPage() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeBets?.length || 0}</div>
+            <div className="text-2xl font-bold">{activeBets.length}</div>
             <p className="text-xs text-muted-foreground">
               Pending and accepted
             </p>
@@ -169,7 +171,7 @@ export default function DashboardPage() {
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="text-sm text-muted-foreground mt-2">Loading bets...</p>
               </div>
-            ) : !activeBets || activeBets.length === 0 ? (
+            ) : activeBets.length === 0 ? (
               <div className="text-center py-4 text-muted-foreground">
                 <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No active bets</p>
@@ -177,12 +179,12 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {(activeBets || []).slice(0, 3).map((bet) => (
+                {activeBets.slice(0, 3).map((bet) => (
                   <div key={bet.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                       <div>
-                        <p className="text-sm font-medium">Bet #{bet.id.slice(0, 8)}</p>
+                        <p className="text-sm font-medium">Bet #{typeof bet.id === "string" ? bet.id.slice(0, 8) : ''}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(bet.created_at)}
                         </p>
@@ -193,9 +195,9 @@ export default function DashboardPage() {
                     </Badge>
                   </div>
                 ))}
-                {(activeBets || []).length > 3 && (
+                {activeBets.length > 3 && (
                   <Button variant="ghost" className="w-full text-sm">
-                    View all {(activeBets || []).length} active bets
+                    View all {activeBets.length} active bets
                   </Button>
                 )}
               </div>

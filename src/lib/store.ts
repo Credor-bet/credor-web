@@ -97,16 +97,30 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   refreshWallet: async () => {
     try {
       const { user } = get()
-      if (!user) return
+      console.log('Refreshing wallet for user:', user?.id)
+      
+      if (!user) {
+        console.log('No user found, skipping wallet refresh')
+        return
+      }
 
-      const { data: wallet } = await supabase
+      const { data: wallet, error } = await supabase
         .from('wallets')
         .select('*')
         .eq('user_id', user.id)
         .single()
 
+      if (error) {
+        console.error('Error fetching wallet:', error)
+        return
+      }
+
       if (wallet) {
+        console.log('Wallet found:', wallet)
         set({ wallet })
+      } else {
+        console.log('No wallet found for user:', user.id)
+        set({ wallet: null })
       }
     } catch (error) {
       console.error('Error refreshing wallet:', error)
@@ -142,10 +156,32 @@ export const useBettingStore = create<BettingStore>((set) => ({
   refreshBets: async () => {
     set({ isLoadingBets: true })
     try {
-      const { data: userBets } = await supabase
-        .from('view_user_bets')
-        .select('*')
+      const { user } = useAuthStore.getState()
+      if (!user) {
+        console.log('No user found, skipping bets refresh')
+        set({ activeBets: [], betHistory: [] })
+        return
+      }
+
+      console.log('Refreshing bets for user:', user.id)
+
+      // Fetch all bets where user is creator or opponent
+      const { data: userBets, error } = await supabase
+        .from('bets')
+        .select(`
+          *,
+          bet_predictions!inner(user_id, prediction, amount)
+        `)
+        .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
         .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching bets:', error)
+        set({ activeBets: [], betHistory: [] })
+        return
+      }
+
+      console.log('Fetched bets:', userBets)
 
       if (userBets) {
         const active = userBets.filter(bet => 
@@ -155,6 +191,9 @@ export const useBettingStore = create<BettingStore>((set) => ({
           ['settled', 'cancelled', 'rejected'].includes(bet.status)
         )
         
+        console.log('Active bets:', active)
+        console.log('History bets:', history)
+        
         set({ activeBets: active, betHistory: history })
       }
     } catch (error) {
@@ -162,6 +201,62 @@ export const useBettingStore = create<BettingStore>((set) => ({
       set({ activeBets: [], betHistory: [] })
     } finally {
       set({ isLoadingBets: false })
+    }
+  },
+}))
+
+// Recent Activity store
+interface Transaction {
+  id: string
+  type: string
+  amount: number
+  status: 'pending' | 'completed' | 'failed'
+  created_at: string
+  currency: string
+  provider: string
+}
+
+interface RecentActivity {
+  transactions: Transaction[]
+  isLoadingActivity: boolean
+}
+
+interface RecentActivityActions {
+  setTransactions: (transactions: Transaction[]) => void
+  setLoadingActivity: (loading: boolean) => void
+  refreshTransactions: () => Promise<void>
+}
+
+type RecentActivityStore = RecentActivity & RecentActivityActions
+
+export const useRecentActivityStore = create<RecentActivityStore>((set) => ({
+  transactions: [],
+  isLoadingActivity: false,
+
+  setTransactions: (transactions) => set({ transactions }),
+  setLoadingActivity: (isLoadingActivity) => set({ isLoadingActivity }),
+
+  refreshTransactions: async () => {
+    const { user } = useAuthStore.getState()
+    if (!user) return
+
+    set({ isLoadingActivity: true })
+    try {
+      const { data: transactions } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (transactions) {
+        set({ transactions })
+      }
+    } catch (error) {
+      console.error('Error refreshing transactions:', error)
+      set({ transactions: [] })
+    } finally {
+      set({ isLoadingActivity: false })
     }
   },
 }))

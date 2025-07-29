@@ -60,3 +60,56 @@ export function getMatchOutcomeText(outcome: string): string {
       return 'Unknown'
   }
 }
+
+export function getTransactionDisplayInfo(type: string, amount: number, currency: string) {
+  switch (type) {
+    case 'deposit':
+      return {
+        title: 'Deposit successful',
+        description: `+${formatCurrency(amount, currency)}`,
+        bgColor: 'bg-green-50',
+        dotColor: 'bg-green-500',
+        textColor: 'text-green-700'
+      }
+    case 'withdrawal':
+      return {
+        title: 'Withdrawal processed',
+        description: `-${formatCurrency(amount, currency)}`,
+        bgColor: 'bg-blue-50',
+        dotColor: 'bg-blue-500',
+        textColor: 'text-blue-700'
+      }
+    case 'bet_win':
+      return {
+        title: 'Bet won!',
+        description: `+${formatCurrency(amount, currency)}`,
+        bgColor: 'bg-green-50',
+        dotColor: 'bg-green-500',
+        textColor: 'text-green-700'
+      }
+    case 'bet_loss':
+      return {
+        title: 'Bet lost',
+        description: `-${formatCurrency(amount, currency)}`,
+        bgColor: 'bg-red-50',
+        dotColor: 'bg-red-500',
+        textColor: 'text-red-700'
+      }
+    case 'bet_cancel':
+      return {
+        title: 'Bet cancelled',
+        description: `Refunded ${formatCurrency(amount, currency)}`,
+        bgColor: 'bg-yellow-50',
+        dotColor: 'bg-yellow-500',
+        textColor: 'text-yellow-700'
+      }
+    default:
+      return {
+        title: 'Transaction',
+        description: `${formatCurrency(amount, currency)}`,
+        bgColor: 'bg-gray-50',
+        dotColor: 'bg-gray-500',
+        textColor: 'text-gray-700'
+      }
+  }
+}

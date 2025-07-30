@@ -240,7 +240,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {activeBets.slice(0, 3).map((bet: any) => {
+                {activeBets.slice(0, 3).map((bet: { id: string; creator_id: string; opponent_id: string; status: string; created_at: string }) => {
                   const indicator = getBetIndicator(bet)
                   const role = getBetRole(bet)
                   

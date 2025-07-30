@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+// import { useRouter } from 'next/navigation' // Removed unused import
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -37,7 +37,7 @@ export default function SignInPage() {
         // Force a hard refresh to ensure the session is properly set
         window.location.href = '/dashboard'
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
       setIsLoading(false)
     }
@@ -59,7 +59,7 @@ export default function SignInPage() {
         setError(error.message)
         setIsLoading(false)
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
       setIsLoading(false)
     }

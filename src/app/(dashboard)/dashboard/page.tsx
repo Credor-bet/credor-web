@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const refreshBets = bettingStore?.refreshBets;
 
   // Helper function to get bet indicator
-  const getBetIndicator = (bet: { creator_id: string; opponent_id: string; status: string }) => {
+  const getBetIndicator = (bet: { creator_id: string; opponent_id: string | null; status: string }) => {
     const isCreator = bet.creator_id === user?.id
     const isOpponent = bet.opponent_id === user?.id
     
@@ -45,7 +45,7 @@ export default function DashboardPage() {
   }
 
   // Helper function to get bet role
-  const getBetRole = (bet: { creator_id: string; opponent_id: string }) => {
+  const getBetRole = (bet: { creator_id: string; opponent_id: string | null }) => {
     if (bet.creator_id === user?.id) return 'Creator'
     if (bet.opponent_id === user?.id) return 'Opponent'
     return 'Participant'
@@ -240,7 +240,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {activeBets.slice(0, 3).map((bet: { id: string; creator_id: string; opponent_id: string; status: string; created_at: string }) => {
+                {activeBets.slice(0, 3).map((bet: { id: string; creator_id: string; opponent_id: string | null; status: string; created_at: string }) => {
                   const indicator = getBetIndicator(bet)
                   const role = getBetRole(bet)
                   

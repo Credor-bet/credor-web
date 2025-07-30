@@ -1,4 +1,3 @@
-import { createClient } from 'graphql-ws'
 import { GraphQLClient } from 'graphql-request'
 
 // GraphQL endpoint URL (you'll need to replace this with your actual endpoint)
@@ -204,17 +203,60 @@ export const DEBUG_USER_DATA = `
 `
 
 // Helper functions to extract data from GraphQL responses
-export const extractWalletFromResponse = (response: any) => {
+interface GraphQLResponse {
+  wallet?: {
+    edges: Array<{
+      node: {
+        id: string
+        user_id: string
+        balance: number
+        locked_balance: number
+        currency: string
+        created_at: string
+        updated_at: string
+      }
+    }>
+  }
+  activeBets?: {
+    edges: Array<{
+      node: {
+        id: string
+        creator_id: string
+        opponent_id: string | null
+        match_id: string
+        min_opponent_amount: number
+        status: string
+        max_participants: number
+        created_at: string
+        updated_at: string
+        settled_at: string | null
+      }
+    }>
+  }
+  user?: {
+    edges: Array<{
+      node: {
+        id: string
+        username: string
+        email: string
+      }
+    }>
+  }
+  [key: string]: unknown
+}
+
+export const extractWalletFromResponse = (response: GraphQLResponse) => {
   const edges = response?.wallet?.edges || []
   return edges.length > 0 ? edges[0].node : null
 }
 
-export const extractBetsFromResponse = (response: any, key: string = 'activeBets') => {
-  const edges = response?.[key]?.edges || []
-  return edges.map((edge: any) => edge.node)
+export const extractBetsFromResponse = (response: GraphQLResponse, key: string = 'activeBets') => {
+  const data = response?.[key] as { edges: Array<{ node: unknown }> } | undefined
+  const edges = data?.edges || []
+  return edges.map((edge: { node: unknown }) => edge.node)
 }
 
-export const extractUserFromResponse = (response: any) => {
+export const extractUserFromResponse = (response: GraphQLResponse) => {
   const edges = response?.user?.edges || []
   return edges.length > 0 ? edges[0].node : null
 } 

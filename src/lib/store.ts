@@ -1,16 +1,5 @@
 import { create } from 'zustand'
 import { supabase } from './supabase'
-import { 
-  graphqlClient, 
-  createAuthenticatedGraphQLClient,
-  GET_USER_WALLET, 
-  GET_USER_ACTIVE_BETS, 
-  GET_USER_DASHBOARD_DATA,
-  DEBUG_USER_DATA,
-  extractWalletFromResponse,
-  extractBetsFromResponse,
-  extractUserFromResponse
-} from './graphql'
 
 interface User {
   id: string

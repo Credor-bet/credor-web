@@ -1,16 +1,5 @@
 import { create } from 'zustand'
 import { supabase } from './supabase'
-import { 
-  graphqlClient, 
-  createAuthenticatedGraphQLClient,
-  GET_USER_WALLET, 
-  GET_USER_ACTIVE_BETS, 
-  GET_USER_DASHBOARD_DATA,
-  DEBUG_USER_DATA,
-  extractWalletFromResponse,
-  extractBetsFromResponse,
-  extractUserFromResponse
-} from './graphql'
 
 interface User {
   id: string
@@ -114,8 +103,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         return
       }
 
-      // Temporarily disable GraphQL due to orderBy syntax issues
-      console.log('Using Supabase wallet fetch (GraphQL temporarily disabled)...')
       const { data: wallet, error } = await supabase
         .from('wallets')
         .select('*')
@@ -128,7 +115,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
 
       if (wallet) {
-        console.log('Wallet found via Supabase:', wallet)
+        console.log('Wallet found:', wallet)
         set({ wallet })
       } else {
         console.log('No wallet found for user:', user.id)
@@ -152,7 +139,6 @@ interface BettingActions {
   setBetHistory: (bets: Bet[]) => void
   setLoadingBets: (loading: boolean) => void
   refreshBets: () => Promise<void>
-  debugUserData: () => Promise<void>
 }
 
 type BettingStore = BettingState & BettingActions
@@ -178,8 +164,7 @@ export const useBettingStore = create<BettingStore>((set) => ({
 
       console.log('Refreshing bets for user:', user.id)
 
-      // Temporarily disable GraphQL due to orderBy syntax issues
-      console.log('Using Supabase bets fetch (GraphQL temporarily disabled)...')
+      // Fetch all bets where user is creator or opponent
       const { data: userBets, error } = await supabase
         .from('bets')
         .select(`
@@ -195,7 +180,7 @@ export const useBettingStore = create<BettingStore>((set) => ({
         return
       }
 
-      console.log('Fetched bets via Supabase:', userBets)
+      console.log('Fetched bets:', userBets)
 
       if (userBets) {
         const active = userBets.filter(bet => 
@@ -205,8 +190,8 @@ export const useBettingStore = create<BettingStore>((set) => ({
           ['settled', 'cancelled', 'rejected'].includes(bet.status)
         )
         
-        console.log('Active bets via Supabase:', active)
-        console.log('History bets via Supabase:', history)
+        console.log('Active bets:', active)
+        console.log('History bets:', history)
         
         set({ activeBets: active, betHistory: history })
       }
@@ -215,26 +200,6 @@ export const useBettingStore = create<BettingStore>((set) => ({
       set({ activeBets: [], betHistory: [] })
     } finally {
       set({ isLoadingBets: false })
-    }
-  },
-
-  debugUserData: async () => {
-    try {
-      const { user } = useAuthStore.getState()
-      if (!user) {
-        console.log('No user found for debug')
-        return
-      }
-
-      console.log('=== DEBUG USER DATA ===')
-      console.log('User ID:', user.id)
-      
-      // GraphQL debug temporarily disabled due to orderBy syntax issues
-      console.log('GraphQL debug temporarily disabled')
-      
-      console.log('=== END DEBUG ===')
-    } catch (error) {
-      console.error('Error in debugUserData:', error)
     }
   },
 }))

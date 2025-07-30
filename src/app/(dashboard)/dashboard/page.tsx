@@ -26,6 +26,14 @@ export default function DashboardPage() {
   const bettingStore = useBettingStore();
   const activeBets = Array.isArray(bettingStore?.activeBets) ? bettingStore.activeBets : [];
   const refreshBets = bettingStore?.refreshBets;
+  const debugUserData = bettingStore?.debugUserData;
+  
+  // Debug logging for store access (only log once per render)
+  useEffect(() => {
+    console.log('Betting store:', bettingStore);
+    console.log('Debug function available:', !!debugUserData);
+    console.log('Store keys:', Object.keys(bettingStore || {}));
+  }, [bettingStore, debugUserData]);
 
   // Helper function to get bet indicator
   const getBetIndicator = (bet: { creator_id: string; opponent_id: string | null; status: string }) => {
@@ -64,32 +72,39 @@ export default function DashboardPage() {
       })
 
       try {
-        const promises = [
-          refreshUser().catch(err => {
-            console.error('Error refreshing user:', err)
-            return null
-          }),
-          refreshWallet().catch(err => {
-            console.error('Error refreshing wallet:', err)
-            return null
-          })
-        ]
+        // First, ensure user is loaded
+        await refreshUser().catch(err => {
+          console.error('Error refreshing user:', err)
+          return null
+        })
         
-        // Only add refreshBets if it exists
-        if (refreshBets) {
-          promises.push(
-            refreshBets().catch(err => {
-              console.error('Error refreshing bets:', err)
+        // Then load wallet and bets if user exists
+        if (user?.id) {
+          const promises = [
+            refreshWallet().catch(err => {
+              console.error('Error refreshing wallet:', err)
               return null
             })
-          )
-        }
+          ]
+          
+          // Only add refreshBets if it exists
+          if (refreshBets) {
+            promises.push(
+              refreshBets().catch(err => {
+                console.error('Error refreshing bets:', err)
+                return null
+              })
+            )
+          }
 
-        // Race between data loading and timeout
-        await Promise.race([
-          Promise.all(promises),
-          timeoutPromise
-        ])
+          // Race between data loading and timeout
+          await Promise.race([
+            Promise.all(promises),
+            timeoutPromise
+          ])
+        } else {
+          console.log('No user available, skipping wallet and bets refresh')
+        }
         
         console.log('Dashboard data loaded successfully')
       } catch (error) {
@@ -101,7 +116,31 @@ export default function DashboardPage() {
     }
 
     loadData()
-  }, [refreshUser, refreshWallet, refreshBets])
+  }, [refreshUser, refreshWallet, refreshBets, user?.id])
+
+  // Retry loading wallet and bets when user becomes available
+  useEffect(() => {
+    if (user?.id && !wallet && !isLoading) {
+      console.log('User available, retrying wallet and bets load...')
+      const loadWalletAndBets = async () => {
+        try {
+          await Promise.all([
+            refreshWallet().catch(err => {
+              console.error('Error refreshing wallet:', err)
+              return null
+            }),
+            refreshBets?.().catch(err => {
+              console.error('Error refreshing bets:', err)
+              return null
+            })
+          ])
+        } catch (error) {
+          console.error('Error in retry load:', error)
+        }
+      }
+      loadWalletAndBets()
+    }
+  }, [user?.id, wallet, isLoading, refreshWallet, refreshBets])
 
   if (isLoading) {
     return (
@@ -118,17 +157,27 @@ export default function DashboardPage() {
     <div className="md:ml-64 p-4 md:p-6 space-y-6">
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white">
-        <div className="flex items-center space-x-4">
-          <Avatar className="h-16 w-16">
-            <AvatarImage src={user?.avatar_url || ''} />
-            <AvatarFallback className="text-lg">
-              {user?.username?.charAt(0).toUpperCase() || 'U'}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h1 className="text-2xl font-bold">Welcome back, {user?.username}!</h1>
-            <p className="text-blue-100">Ready to place some bets?</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Avatar className="h-16 w-16">
+              <AvatarImage src={user?.avatar_url || ''} />
+              <AvatarFallback className="text-lg">
+                {user?.username?.charAt(0).toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="text-2xl font-bold">Welcome back, {user?.username}!</h1>
+              <p className="text-blue-100">Ready to place some bets?</p>
+            </div>
           </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={debugUserData || (() => console.log('Debug function not available'))}
+            className="text-white border-white hover:bg-white hover:text-blue-600"
+          >
+            Debug Data
+          </Button>
         </div>
       </div>
 

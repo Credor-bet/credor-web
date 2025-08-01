@@ -2,7 +2,6 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   experimental: {
-    optimizeCss: true,
     optimizePackageImports: ['@supabase/supabase-js'],
   },
   compiler: {

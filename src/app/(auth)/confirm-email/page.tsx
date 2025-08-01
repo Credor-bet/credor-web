@@ -162,7 +162,7 @@ export default function ConfirmEmailPage() {
     )
 
     return () => subscription.unsubscribe()
-  }, [router])
+  }, [router, email, hasAutoSent, searchParams])
 
   // Handle resend cooldown timer
   useEffect(() => {
@@ -390,8 +390,8 @@ export default function ConfirmEmailPage() {
              <div className="flex items-start gap-3">
                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
                <div className="text-sm text-gray-700">
-                 <p className="font-medium mb-1">Can't find the email?</p>
-                 <p>Check your spam folder or try resending the confirmation code. There's a 30-second cooldown between requests.</p>
+                 <p className="font-medium mb-1">Can&apos;t find the email?</p>
+                 <p>Check your spam folder or try resending the confirmation code. There&apos;s a 30-second cooldown between requests.</p>
                </div>
              </div>
            </div>

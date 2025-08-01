@@ -156,14 +156,14 @@ export function getTransactionDisplayInfo(type: string, amount: number, currency
 const isDevelopment = process.env.NODE_ENV === 'development'
 
 // Optimized logging function
-export function devLog(message: string, ...args: any[]) {
+export function devLog(message: string, ...args: unknown[]) {
   if (isDevelopment) {
     console.log(message, ...args)
   }
 }
 
 // Optimized error logging function
-export function devError(message: string, ...args: any[]) {
+export function devError(message: string, ...args: unknown[]) {
   if (isDevelopment) {
     console.error(message, ...args)
   }

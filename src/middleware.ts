@@ -17,7 +17,6 @@ export async function middleware(req: NextRequest) {
   console.log('Email confirmed:', !!session?.user?.email_confirmed_at)
 
   // Define route types
-  const publicRoutes = ['/', '/signin', '/signup', '/confirm-email']
   const authRoutes = ['/signin', '/signup']
   const protectedRoutes = ['/dashboard', '/profile-completion']
 

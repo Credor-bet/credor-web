@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Mail, Lock, Eye, EyeOff, Loader2, User } from 'lucide-react'
+import { Lock, Eye, EyeOff, Loader2, User } from 'lucide-react'
 
 export default function SignInPage() {
   const [identifier, setIdentifier] = useState('')

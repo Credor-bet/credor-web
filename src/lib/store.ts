@@ -57,7 +57,7 @@ interface AuthActions {
 type AuthStore = AuthState & AuthActions
 
 // Request deduplication
-const pendingRequests = new Map<string, Promise<any>>()
+const pendingRequests = new Map<string, Promise<void>>()
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
@@ -87,7 +87,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
           // Try to find profile by ID first
-          let { data: profile, error } = await supabase
+          let { data: profile } = await supabase
             .from('users')
             .select('*')
             .eq('id', user.id)
@@ -95,7 +95,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           
           // If not found by ID, try by email (in case of auth sync issues)
           if (!profile && user.email) {
-            const { data: profileByEmail, error: emailError } = await supabase
+            const { data: profileByEmail } = await supabase
               .from('users')
               .select('*')
               .eq('email', user.email)

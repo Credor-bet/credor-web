@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // Memoized function to handle user session
-  const handleUserSession = useCallback(async (session: any) => {
+  const handleUserSession = useCallback(async (session: { user?: User } | null) => {
     if (!session?.user) {
       devLog('Auth provider: No session, clearing user')
       setUser(null)

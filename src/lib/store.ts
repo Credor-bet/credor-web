@@ -56,6 +56,9 @@ interface AuthActions {
 
 type AuthStore = AuthState & AuthActions
 
+// Request deduplication
+const pendingRequests = new Map<string, Promise<void>>()
+
 export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   wallet: null,
@@ -72,57 +75,99 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   refreshUser: async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id)
-          .single()
-        
-        if (profile) {
-          set({ user: profile, isAuthenticated: true })
-        }
-      } else {
-        set({ user: null, isAuthenticated: false })
-      }
-    } catch (error) {
-      console.error('Error refreshing user:', error)
-      set({ user: null, isAuthenticated: false })
+    const requestKey = 'refreshUser'
+    
+    // Check if request is already pending
+    if (pendingRequests.has(requestKey)) {
+      return pendingRequests.get(requestKey)
     }
+
+    const request = (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          // Try to find profile by ID first
+          let { data: profile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle()
+          
+          // If not found by ID, try by email (in case of auth sync issues)
+          if (!profile && user.email) {
+            const { data: profileByEmail } = await supabase
+              .from('users')
+              .select('*')
+              .eq('email', user.email)
+              .maybeSingle()
+            
+            if (profileByEmail) {
+              profile = profileByEmail
+            }
+          }
+          
+          if (profile) {
+            set({ user: profile, isAuthenticated: true })
+          } else {
+            set({ user: null, isAuthenticated: false })
+          }
+        } else {
+          set({ user: null, isAuthenticated: false })
+        }
+      } catch (error) {
+        console.error('Error refreshing user:', error)
+        set({ user: null, isAuthenticated: false })
+      } finally {
+        pendingRequests.delete(requestKey)
+      }
+    })()
+
+    pendingRequests.set(requestKey, request)
+    return request
   },
 
   refreshWallet: async () => {
     try {
       const { user } = get()
-      console.log('Refreshing wallet for user:', user?.id)
       
       if (!user) {
-        console.log('No user found, skipping wallet refresh')
         return
       }
 
-      // Temporarily disable GraphQL due to orderBy syntax issues
-      console.log('Using Supabase wallet fetch (GraphQL temporarily disabled)...')
-      const { data: wallet, error } = await supabase
-        .from('wallets')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-      if (error) {
-        console.error('Error fetching wallet:', error)
-        return
+      const requestKey = `refreshWallet_${user.id}`
+      
+      // Check if request is already pending for this user
+      if (pendingRequests.has(requestKey)) {
+        return pendingRequests.get(requestKey)
       }
 
-      if (wallet) {
-        console.log('Wallet found via Supabase:', wallet)
-        set({ wallet })
-      } else {
-        console.log('No wallet found for user:', user.id)
-        set({ wallet: null })
-      }
+      const request = (async () => {
+        try {
+          const { data: wallet, error } = await supabase
+            .from('wallets')
+            .select('*')
+            .eq('user_id', user.id)
+            .single()
+
+          if (error) {
+            console.error('Error fetching wallet:', error)
+            return
+          }
+
+          if (wallet) {
+            set({ wallet })
+          } else {
+            set({ wallet: null })
+          }
+        } catch (error) {
+          console.error('Error refreshing wallet:', error)
+        } finally {
+          pendingRequests.delete(requestKey)
+        }
+      })()
+
+      pendingRequests.set(requestKey, request)
+      return request
     } catch (error) {
       console.error('Error refreshing wallet:', error)
     }
@@ -157,48 +202,59 @@ export const useBettingStore = create<BettingStore>((set) => ({
 
   refreshBets: async () => {
     set({ isLoadingBets: true })
+    
     try {
       const { user } = useAuthStore.getState()
       if (!user) {
-        console.log('No user found, skipping bets refresh')
         set({ activeBets: [], betHistory: [] })
         return
       }
 
-      console.log('Refreshing bets for user:', user.id)
-
-      // Temporarily disable GraphQL due to orderBy syntax issues
-      console.log('Using Supabase bets fetch (GraphQL temporarily disabled)...')
-      const { data: userBets, error } = await supabase
-        .from('bets')
-        .select(`
-          *,
-          bet_predictions!inner(user_id, prediction, amount)
-        `)
-        .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching bets:', error)
-        set({ activeBets: [], betHistory: [] })
-        return
+      const requestKey = `refreshBets_${user.id}`
+      
+      // Check if request is already pending for this user
+      if (pendingRequests.has(requestKey)) {
+        return pendingRequests.get(requestKey)
       }
 
-      console.log('Fetched bets via Supabase:', userBets)
+      const request = (async () => {
+        try {
+          const { data: userBets, error } = await supabase
+            .from('bets')
+            .select(`
+              *,
+              bet_predictions!inner(user_id, prediction, amount)
+            `)
+            .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
+            .order('created_at', { ascending: false })
 
-      if (userBets) {
-        const active = userBets.filter(bet => 
-          ['pending', 'accepted'].includes(bet.status)
-        )
-        const history = userBets.filter(bet => 
-          ['settled', 'cancelled', 'rejected'].includes(bet.status)
-        )
-        
-        console.log('Active bets via Supabase:', active)
-        console.log('History bets via Supabase:', history)
-        
-        set({ activeBets: active, betHistory: history })
-      }
+          if (error) {
+            console.error('Error fetching bets:', error)
+            set({ activeBets: [], betHistory: [] })
+            return
+          }
+
+          if (userBets) {
+            const active = userBets.filter(bet => 
+              ['pending', 'accepted'].includes(bet.status)
+            )
+            const history = userBets.filter(bet => 
+              ['settled', 'cancelled', 'rejected'].includes(bet.status)
+            )
+            
+            set({ activeBets: active, betHistory: history })
+          }
+        } catch (error) {
+          console.error('Error refreshing bets:', error)
+          set({ activeBets: [], betHistory: [] })
+        } finally {
+          set({ isLoadingBets: false })
+          pendingRequests.delete(requestKey)
+        }
+      })()
+
+      pendingRequests.set(requestKey, request)
+      return request
     } catch (error) {
       console.error('Error refreshing bets:', error)
       set({ activeBets: [], betHistory: [] })
@@ -217,10 +273,6 @@ export const useBettingStore = create<BettingStore>((set) => ({
 
       console.log('=== DEBUG USER DATA ===')
       console.log('User ID:', user.id)
-      
-      // GraphQL debug temporarily disabled due to orderBy syntax issues
-      console.log('GraphQL debug temporarily disabled')
-      
       console.log('=== END DEBUG ===')
     } catch (error) {
       console.error('Error in debugUserData:', error)
@@ -263,24 +315,37 @@ export const useRecentActivityStore = create<RecentActivityStore>((set) => ({
     const { user } = useAuthStore.getState()
     if (!user) return
 
-    set({ isLoadingActivity: true })
-    try {
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (transactions) {
-        set({ transactions })
-      }
-    } catch (error) {
-      console.error('Error refreshing transactions:', error)
-      set({ transactions: [] })
-    } finally {
-      set({ isLoadingActivity: false })
+    const requestKey = `refreshTransactions_${user.id}`
+    
+    // Check if request is already pending for this user
+    if (pendingRequests.has(requestKey)) {
+      return pendingRequests.get(requestKey)
     }
+
+    const request = (async () => {
+      set({ isLoadingActivity: true })
+      try {
+        const { data: transactions } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10)
+
+        if (transactions) {
+          set({ transactions })
+        }
+      } catch (error) {
+        console.error('Error refreshing transactions:', error)
+        set({ transactions: [] })
+      } finally {
+        set({ isLoadingActivity: false })
+        pendingRequests.delete(requestKey)
+      }
+    })()
+
+    pendingRequests.set(requestKey, request)
+    return request
   },
 }))
 
@@ -327,34 +392,61 @@ export const useFriendsStore = create<FriendsStore>((set) => ({
     const { user } = useAuthStore.getState()
     if (!user) return
 
-    set({ isLoadingFriends: true })
-    try {
-      const { data: friends } = await supabase
-        .rpc('get_friends_with_stats', { uid: user.id })
-
-      if (friends) {
-        set({ friends })
-      }
-    } catch (error) {
-      console.error('Error refreshing friends:', error)
-    } finally {
-      set({ isLoadingFriends: false })
+    const requestKey = `refreshFriends_${user.id}`
+    
+    // Check if request is already pending for this user
+    if (pendingRequests.has(requestKey)) {
+      return pendingRequests.get(requestKey)
     }
+
+    const request = (async () => {
+      set({ isLoadingFriends: true })
+      try {
+        const { data: friends } = await supabase
+          .rpc('get_friends_with_stats', { uid: user.id })
+
+        if (friends) {
+          set({ friends })
+        }
+      } catch (error) {
+        console.error('Error refreshing friends:', error)
+      } finally {
+        set({ isLoadingFriends: false })
+        pendingRequests.delete(requestKey)
+      }
+    })()
+
+    pendingRequests.set(requestKey, request)
+    return request
   },
 
   refreshFriendRequests: async () => {
     const { user } = useAuthStore.getState()
     if (!user) return
 
-    try {
-      const { data: requests } = await supabase
-        .rpc('get_friend_requests', { user_id: user.id })
-
-      if (requests) {
-        set({ friendRequests: requests })
-      }
-    } catch (error) {
-      console.error('Error refreshing friend requests:', error)
+    const requestKey = `refreshFriendRequests_${user.id}`
+    
+    // Check if request is already pending for this user
+    if (pendingRequests.has(requestKey)) {
+      return pendingRequests.get(requestKey)
     }
+
+    const request = (async () => {
+      try {
+        const { data: requests } = await supabase
+          .rpc('get_friend_requests', { user_id: user.id })
+
+        if (requests) {
+          set({ friendRequests: requests })
+        }
+      } catch (error) {
+        console.error('Error refreshing friend requests:', error)
+      } finally {
+        pendingRequests.delete(requestKey)
+      }
+    })()
+
+    pendingRequests.set(requestKey, request)
+    return request
   },
 })) 

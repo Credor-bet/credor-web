@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAuthStore, useBettingStore } from '@/lib/store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -26,14 +26,10 @@ export default function DashboardPage() {
   const bettingStore = useBettingStore();
   const activeBets = Array.isArray(bettingStore?.activeBets) ? bettingStore.activeBets : [];
   const refreshBets = bettingStore?.refreshBets;
-  const debugUserData = bettingStore?.debugUserData;
   
-  // Debug logging for store access (only log once per render)
-  useEffect(() => {
-    console.log('Betting store:', bettingStore);
-    console.log('Debug function available:', !!debugUserData);
-    console.log('Store keys:', Object.keys(bettingStore || {}));
-  }, [bettingStore, debugUserData]);
+  // Refs to prevent duplicate calls
+  const dataLoadRef = useRef(false)
+  const userLoadRef = useRef<string | null>(null)
 
   // Helper function to get bet indicator
   const getBetIndicator = (bet: { creator_id: string; opponent_id: string | null; status: string }) => {
@@ -59,69 +55,70 @@ export default function DashboardPage() {
     return 'Participant'
   }
 
-  useEffect(() => {
-    const loadData = async () => {
-      console.log('Starting dashboard data load...')
-      
-      // Add timeout to prevent infinite loading
-      const timeoutPromise = new Promise(resolve => {
-        setTimeout(() => {
-          console.log('Dashboard load timeout - forcing completion')
-          resolve(null)
-        }, 10000) // 10 second timeout
-      })
+  // Memoized data loading function
+  const loadDashboardData = useCallback(async () => {
+    if (dataLoadRef.current) return
+    dataLoadRef.current = true
 
-      try {
-        // First, ensure user is loaded
-        await refreshUser().catch(err => {
-          console.error('Error refreshing user:', err)
-          return null
-        })
+    // Add timeout to prevent infinite loading
+    const timeoutPromise = new Promise(resolve => {
+      setTimeout(() => {
+        resolve(null)
+      }, 10000) // 10 second timeout
+    })
+
+    try {
+      // First, ensure user is loaded
+      await refreshUser().catch(err => {
+        console.error('Error refreshing user:', err)
+        return null
+      })
+      
+      // Then load wallet and bets if user exists
+      if (user?.id) {
+        const promises = [
+          refreshWallet().catch(err => {
+            console.error('Error refreshing wallet:', err)
+            return null
+          })
+        ]
         
-        // Then load wallet and bets if user exists
-        if (user?.id) {
-          const promises = [
-            refreshWallet().catch(err => {
-              console.error('Error refreshing wallet:', err)
+        // Only add refreshBets if it exists
+        if (refreshBets) {
+          promises.push(
+            refreshBets().catch(err => {
+              console.error('Error refreshing bets:', err)
               return null
             })
-          ]
-          
-          // Only add refreshBets if it exists
-          if (refreshBets) {
-            promises.push(
-              refreshBets().catch(err => {
-                console.error('Error refreshing bets:', err)
-                return null
-              })
-            )
-          }
-
-          // Race between data loading and timeout
-          await Promise.race([
-            Promise.all(promises),
-            timeoutPromise
-          ])
-        } else {
-          console.log('No user available, skipping wallet and bets refresh')
+          )
         }
-        
-        console.log('Dashboard data loaded successfully')
-      } catch (error) {
-        console.error('Error loading dashboard data:', error)
-      } finally {
-        console.log('Setting loading to false')
-        setIsLoading(false)
-      }
-    }
 
-    loadData()
+        // Race between data loading and timeout
+        await Promise.race([
+          Promise.all(promises),
+          timeoutPromise
+        ])
+      }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }, [refreshUser, refreshWallet, refreshBets, user?.id])
 
-  // Retry loading wallet and bets when user becomes available
+  // Main data loading effect
   useEffect(() => {
-    if (user?.id && !wallet && !isLoading) {
-      console.log('User available, retrying wallet and bets load...')
+    // Only load data if user changes or on initial load
+    if (user?.id !== userLoadRef.current) {
+      userLoadRef.current = user?.id || null
+      dataLoadRef.current = false
+      loadDashboardData()
+    }
+  }, [user?.id, loadDashboardData])
+
+  // Retry loading wallet and bets when user becomes available (only once)
+  useEffect(() => {
+    if (user?.id && !wallet && !isLoading && !dataLoadRef.current) {
       const loadWalletAndBets = async () => {
         try {
           await Promise.all([
@@ -150,9 +147,6 @@ export default function DashboardPage() {
     )
   }
 
-  // Debug logging
-  console.log('Dashboard render - User:', user?.id, 'Wallet:', wallet?.balance, 'Active bets:', activeBets.length)
-
   return (
     <div className="md:ml-64 p-4 md:p-6 space-y-6">
       {/* Welcome Section */}
@@ -170,14 +164,7 @@ export default function DashboardPage() {
               <p className="text-blue-100">Ready to place some bets?</p>
             </div>
           </div>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={debugUserData || (() => console.log('Debug function not available'))}
-            className="text-white border-white hover:bg-white hover:text-blue-600"
-          >
-            Debug Data
-          </Button>
+
         </div>
       </div>
 

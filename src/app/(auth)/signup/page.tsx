@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-// import { useRouter } from 'next/navigation' // Removed unused import
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -20,14 +20,12 @@ export default function SignUpPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-  // const router = useRouter() // Removed unused router
+  const router = useRouter()
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    setMessage('')
 
     if (password !== confirmPassword) {
       setError('Passwords do not match')
@@ -42,7 +40,7 @@ export default function SignUpPage() {
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -54,8 +52,13 @@ export default function SignUpPage() {
 
       if (error) {
         setError(error.message)
-      } else {
-        setMessage('Check your email for a confirmation link!')
+      } else if (data.user) {
+        // Always redirect to confirmation page for email signup
+        // The confirmation page will handle the rest of the flow
+        // Add a small delay to ensure session is established
+        setTimeout(() => {
+          router.push(`/confirm-email?email=${encodeURIComponent(email)}`)
+        }, 100)
       }
     } catch {
       setError('An unexpected error occurred')
@@ -180,11 +183,7 @@ export default function SignUpPage() {
             </div>
           )}
 
-          {message && (
-            <div className="text-sm text-green-600 bg-green-50 p-3 rounded-md">
-              {message}
-            </div>
-          )}
+
 
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (

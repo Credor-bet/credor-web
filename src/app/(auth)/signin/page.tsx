@@ -1,23 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-// import { useRouter } from 'next/navigation' // Removed unused import
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { signInWithUsernameOrEmail } from '@/lib/auth-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2, User } from 'lucide-react'
 
 export default function SignInPage() {
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  // const router = useRouter() // Removed unused router
+  const router = useRouter()
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,19 +26,64 @@ export default function SignInPage() {
     setError('')
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      console.log('Attempting sign in with:', identifier)
+      const result = await signInWithUsernameOrEmail(identifier, password)
+      console.log('Sign in result:', result)
 
-      if (error) {
-        setError(error.message)
+      if (!result.success) {
+        if (result.needsConfirmation) {
+          // User needs to confirm their email
+          setError('Please confirm your email address before signing in.')
+          // Redirect to confirmation page with the email
+          setTimeout(() => {
+            console.log('Redirecting to confirm-email with email:', result.email)
+            router.push(`/confirm-email?email=${encodeURIComponent(result.email || '')}`)
+          }, 2000)
+        } else {
+          setError(result.error || 'Sign in failed')
+        }
         setIsLoading(false)
-      } else if (data.user) {
-        // Force a hard refresh to ensure the session is properly set
-        window.location.href = '/dashboard'
+      } else {
+        // Successful sign in - check if email is confirmed
+        console.log('Sign in successful, checking email confirmation')
+        
+        // Add a small delay to allow auth provider to sync database
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Check email confirmation status in the database
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          const { data: profile } = await supabase
+            .from('users')
+            .select('is_email_verified')
+            .eq('id', session?.user?.id)
+            .maybeSingle()
+          
+          console.log('Sign-in page: Database email verification status:', profile?.is_email_verified)
+          
+          if (profile && !profile.is_email_verified) {
+            console.log('Email not confirmed in database, redirecting to confirm-email')
+            setError('Please confirm your email address before continuing.')
+            setTimeout(() => {
+              router.push(`/confirm-email?email=${encodeURIComponent(session?.user?.email || '')}`)
+            }, 2000)
+          } else {
+            console.log('Email confirmed in database, redirecting to dashboard')
+            // Add a small delay to ensure session is properly established
+            setTimeout(() => {
+              router.push('/dashboard')
+            }, 100)
+          }
+        } catch (error) {
+          console.error('Error checking email verification status:', error)
+          // Fallback to dashboard
+          setTimeout(() => {
+            router.push('/dashboard')
+          }, 100)
+        }
       }
-    } catch {
+    } catch (error) {
+      console.error('Sign in error:', error)
       setError('An unexpected error occurred')
       setIsLoading(false)
     }
@@ -81,15 +127,15 @@ export default function SignInPage() {
       <CardContent className="space-y-4">
         <form onSubmit={handleSignIn} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="identifier">Email or Username</Label>
             <div className="relative">
-              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                id="email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                placeholder="Enter your email or username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 className="pl-10"
                 required
                 disabled={isLoading}

@@ -32,6 +32,7 @@ export function DashboardNav() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const { user, signOut, isLoading } = useAuthStore()
@@ -58,8 +59,17 @@ export function DashboardNav() {
   }, [pathname])
 
   const handleSignOut = async () => {
-    await signOut()
-    router.push('/signin')
+    if (isSigningOut) return // Prevent multiple clicks
+    
+    try {
+      setIsSigningOut(true)
+      await signOut()
+      router.push('/signin')
+    } catch (error) {
+      console.error('Error signing out:', error)
+      // Reset loading state on error
+      setIsSigningOut(false)
+    }
   }
 
   // Don't render until mounted and authenticated
@@ -126,10 +136,15 @@ export function DashboardNav() {
               variant="ghost"
               size="sm"
               onClick={handleSignOut}
-              className="w-full mt-2 text-gray-600 hover:text-gray-900"
+              disabled={isSigningOut}
+              className="w-full mt-2 text-gray-600 hover:text-gray-900 disabled:opacity-50"
             >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
+              {isSigningOut ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+              ) : (
+                <LogOut className="mr-2 h-4 w-4" />
+              )}
+              {isSigningOut ? 'Signing out...' : 'Sign out'}
             </Button>
           </div>
         </div>
@@ -185,10 +200,15 @@ export function DashboardNav() {
               <Button
                 variant="ghost"
                 onClick={handleSignOut}
-                className="w-full justify-start text-gray-600 hover:text-gray-900"
+                disabled={isSigningOut}
+                className="w-full justify-start text-gray-600 hover:text-gray-900 disabled:opacity-50"
               >
-                <LogOut className="mr-3 h-5 w-5" />
-                Sign out
+                {isSigningOut ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-3"></div>
+                ) : (
+                  <LogOut className="mr-3 h-5 w-5" />
+                )}
+                {isSigningOut ? 'Signing out...' : 'Sign out'}
               </Button>
             </nav>
           </div>

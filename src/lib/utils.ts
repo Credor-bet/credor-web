@@ -5,21 +5,59 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number, currency: string = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(amount)
+/**
+ * Calculate age from birth date
+ * @param birthDate - Date of birth in string format (YYYY-MM-DD)
+ * @returns Age in years
+ */
+export function calculateAge(birthDate: string): number {
+  const today = new Date()
+  const birth = new Date(birthDate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const monthDiff = today.getMonth() - birth.getMonth()
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--
+  }
+  
+  return age
 }
 
-export function formatDate(date: string | Date): string {
+/**
+ * Validate if user meets minimum age requirement
+ * @param birthDate - Date of birth in string format (YYYY-MM-DD)
+ * @param minimumAge - Minimum age required (default: 18)
+ * @returns Object with isValid boolean and age number
+ */
+export function validateMinimumAge(birthDate: string, minimumAge: number = 18): { isValid: boolean; age: number } {
+  const age = calculateAge(birthDate)
+  return {
+    isValid: age >= minimumAge,
+    age
+  }
+}
+
+/**
+ * Format date for display
+ * @param date - Date string or Date object
+ * @returns Formatted date string
+ */
+export function formatDate(dateString: string): string {
+  const date = new Date(dateString)
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(date))
+  }).format(date)
+}
+
+export function formatCurrency(amount: number, currency: string = 'USD'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+  }).format(amount)
 }
 
 export function getInitials(name: string): string {
@@ -111,5 +149,68 @@ export function getTransactionDisplayInfo(type: string, amount: number, currency
         dotColor: 'bg-gray-500',
         textColor: 'text-gray-700'
       }
+  }
+}
+
+// Development configuration
+const isDevelopment = process.env.NODE_ENV === 'development'
+
+// Optimized logging function
+export function devLog(message: string, ...args: any[]) {
+  if (isDevelopment) {
+    console.log(message, ...args)
+  }
+}
+
+// Optimized error logging function
+export function devError(message: string, ...args: any[]) {
+  if (isDevelopment) {
+    console.error(message, ...args)
+  }
+}
+
+// Check if we should enable verbose logging
+export function shouldLogVerbose(): boolean {
+  return isDevelopment && process.env.NEXT_PUBLIC_VERBOSE_LOGGING === 'true'
+}
+
+// Debug utility for user profile issues
+export async function debugUserProfile(email: string) {
+  if (!isDevelopment) return
+  
+  try {
+    const { supabase } = await import('./supabase')
+    
+    // Check if user exists by email
+    const { data: userByEmail, error: emailError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle()
+    
+    console.log('=== USER PROFILE DEBUG ===')
+    console.log('Email:', email)
+    console.log('User by email:', userByEmail)
+    console.log('Email error:', emailError)
+    
+    // Check auth user
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    console.log('Auth user:', authUser)
+    
+    if (authUser) {
+      // Check if user exists by auth ID
+      const { data: userById, error: idError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle()
+      
+      console.log('User by ID:', userById)
+      console.log('ID error:', idError)
+    }
+    
+    console.log('=== END DEBUG ===')
+  } catch (error) {
+    console.error('Debug error:', error)
   }
 }

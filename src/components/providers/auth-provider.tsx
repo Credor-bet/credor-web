@@ -19,7 +19,7 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading] = useState(true)
-  const { setUser: setStoreUser, setLoading: setStoreLoading } = useAuthStore()
+  const { setUser: setStoreUser, setLoading: setStoreLoading, refreshWallet } = useAuthStore()
   const profileFetchRef = useRef<Set<string>>(new Set())
   const isInitializedRef = useRef(false)
 
@@ -194,16 +194,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         setStoreUser(profile)
+        // Also refresh wallet data
+        await refreshWallet()
       } else {
         const newProfile = await createUserProfile(session.user)
         if (newProfile) {
           setStoreUser(newProfile)
+          // Also refresh wallet data
+          await refreshWallet()
         }
       }
     } catch (error) {
       devError('Auth provider: Error in profile handling:', error)
     }
-  }, [fetchUserProfile, syncEmailVerification, createUserProfile, setStoreUser, setStoreLoading])
+  }, [fetchUserProfile, syncEmailVerification, createUserProfile, setStoreUser, setStoreLoading, refreshWallet])
 
   useEffect(() => {
     // Get initial session only once

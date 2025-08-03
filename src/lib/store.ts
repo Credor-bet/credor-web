@@ -36,6 +36,38 @@ interface Bet {
   created_at: string
   updated_at: string
   settled_at: string | null
+  // Enhanced fields from joins
+  matches?: {
+    home_team_id: string
+    away_team_id: string
+    start_time: string
+    status: string
+    match_result: string | null
+    home_score: number | null
+    away_score: number | null
+    home_team?: {
+      name: string
+      logo_url: string | null
+    }
+    away_team?: {
+      name: string
+      logo_url: string | null
+    }
+  }
+  creator?: {
+    username: string
+    avatar_url: string | null
+  }
+  opponent?: {
+    username: string
+    avatar_url: string | null
+  }
+  // user_prediction will be computed in the component from bet_predictions
+  bet_predictions?: Array<{
+    user_id: string
+    prediction: string
+    amount: number
+  }>
 }
 
 interface AuthState {
@@ -204,46 +236,89 @@ export const useBettingStore = create<BettingStore>((set) => ({
     set({ isLoadingBets: true })
     
     try {
-      const { user } = useAuthStore.getState()
-      if (!user) {
-        set({ activeBets: [], betHistory: [] })
-        return
-      }
-
-      const requestKey = `refreshBets_${user.id}`
+      // Wait for user to be loaded
+      let attempts = 0
+      const maxAttempts = 10
       
-      // Check if request is already pending for this user
-      if (pendingRequests.has(requestKey)) {
-        return pendingRequests.get(requestKey)
-      }
+             while (attempts < maxAttempts) {
+         const { user } = useAuthStore.getState()
+         
+         if (user) {
+           break
+         }
+         
+         // Wait 500ms before next attempt
+         await new Promise(resolve => setTimeout(resolve, 500))
+         attempts++
+       }
+       
+       const { user } = useAuthStore.getState()
+       
+       if (!user) {
+         set({ activeBets: [], betHistory: [] })
+         return
+       }
 
-      const request = (async () => {
-        try {
-          const { data: userBets, error } = await supabase
-            .from('bets')
-            .select(`
-              *,
-              bet_predictions!inner(user_id, prediction, amount)
-            `)
-            .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
-            .order('created_at', { ascending: false })
+       const requestKey = `refreshBets_${user.id}`
+       
+       // Check if request is already pending for this user
+       if (pendingRequests.has(requestKey)) {
+         return pendingRequests.get(requestKey)
+       }
 
-          if (error) {
-            console.error('Error fetching bets:', error)
-            set({ activeBets: [], betHistory: [] })
-            return
-          }
+       const request = (async () => {
+         try {
+           const { data: userBets, error } = await supabase
+             .from('bets')
+             .select('*')
+             .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
+             .order('created_at', { ascending: false })
+           
+           if (error) {
+             console.error('Error fetching bets:', error)
+             set({ activeBets: [], betHistory: [] })
+             return
+           }
 
-          if (userBets) {
-            const active = userBets.filter(bet => 
-              ['pending', 'accepted'].includes(bet.status)
-            )
-            const history = userBets.filter(bet => 
-              ['settled', 'cancelled', 'rejected'].includes(bet.status)
-            )
-            
-            set({ activeBets: active, betHistory: history })
-          }
+           if (!userBets || userBets.length === 0) {
+             set({ activeBets: [], betHistory: [] })
+             return
+           }
+
+           // Now let's get the detailed data for the bets we found
+           const betIds = userBets.map(bet => bet.id)
+           
+           const { data: detailedBets, error: detailedError } = await supabase
+             .from('bets')
+             .select(`
+               *,
+               matches!bets_match_id_fkey(*, home_team:sports_teams!matches_home_team_id_fkey(*), away_team:sports_teams!matches_away_team_id_fkey(*)),
+               bet_predictions(user_id, prediction, amount),
+               creator:users!bets_creator_id_fkey(username, avatar_url),
+               opponent:users!bets_opponent_id_fkey(username, avatar_url)
+             `)
+             .in('id', betIds)
+             .order('created_at', { ascending: false })
+
+           if (detailedError) {
+             console.error('Error fetching detailed bets:', detailedError)
+             set({ activeBets: [], betHistory: [] })
+             return
+           }
+
+                                               if (detailedBets) {
+                          // Don't pre-process user_prediction, let the component handle it
+                          const processedBets = detailedBets
+
+              const active = processedBets.filter(bet => 
+                ['pending', 'accepted'].includes(bet.status)
+              )
+              const history = processedBets.filter(bet => 
+                ['settled', 'cancelled', 'rejected'].includes(bet.status)
+              )
+              
+              set({ activeBets: active, betHistory: history })
+            }
         } catch (error) {
           console.error('Error refreshing bets:', error)
           set({ activeBets: [], betHistory: [] })

@@ -118,6 +118,8 @@ export default function HistoryPage() {
   useEffect(() => {
     if (!betHistory || !user) return
 
+
+
     let filtered = [...betHistory];
 
     switch (activeFilter) {
@@ -126,59 +128,60 @@ export default function HistoryPage() {
           return bet.status === 'pending' || bet.status === 'accepted'
         })
         break
-      case 'win':
-        filtered = filtered.filter(bet => {
-          const userPrediction = bet.bet_predictions?.find(p => p.user_id === user.id)?.prediction
-          return bet.status === 'settled' &&
-            bet.matches?.match_result &&
-            userPrediction &&
-            bet.matches.match_result === userPrediction
-        })
-        break
-      case 'lose':
-        filtered = filtered.filter(bet => {
-          const userPrediction = bet.bet_predictions?.find(p => p.user_id === user.id)?.prediction
-          const opponentPrediction = bet.bet_predictions?.find(pred => pred.user_id !== user.id)?.prediction
-          
-          if (bet.status !== 'settled' || !bet.matches?.match_result || !userPrediction) {
-            return false
-          }
-          
-          const userCorrect = userPrediction === bet.matches.match_result
-          const opponentCorrect = opponentPrediction === bet.matches.match_result
-          return !userCorrect && opponentCorrect // Only lose if opponent was correct
-        })
-        break
-      case 'draw':
-        filtered = filtered.filter(bet => {
-          const userPrediction = bet.bet_predictions?.find(p => p.user_id === user.id)?.prediction
-          if (bet.status !== 'settled' || !bet.matches?.match_result || !userPrediction) {
-            return false
-          }
+             case 'win':
+         filtered = filtered.filter(bet => {
+           const userPrediction = bet.bet_predictions?.find(p => p.user_id === user.id)?.prediction
+           const userCorrect = userPrediction === bet.matches?.match_result
+           
+           return bet.status === 'settled' &&
+             bet.matches?.match_result &&
+             userPrediction &&
+             userCorrect
+         })
+         break
+             case 'lose':
+         filtered = filtered.filter(bet => {
+           const userPrediction = bet.bet_predictions?.find(p => p.user_id === user.id)?.prediction
+           const opponentPrediction = bet.bet_predictions?.find(pred => pred.user_id !== user.id)?.prediction
+           
+           if (bet.status !== 'settled' || !bet.matches?.match_result || !userPrediction) {
+             return false
+           }
+           
+           const userCorrect = userPrediction === bet.matches.match_result
+           const opponentCorrect = opponentPrediction === bet.matches.match_result
+           const isLose = !userCorrect && opponentCorrect
+           
+           return isLose
+         })
+         break
+       case 'draw':
+         filtered = filtered.filter(bet => {
+           const userPrediction = bet.bet_predictions?.find(p => p.user_id === user.id)?.prediction
+           const opponentPrediction = bet.bet_predictions?.find(pred => pred.user_id !== user.id)?.prediction
+           
+           if (bet.status !== 'settled' || !bet.matches?.match_result || !userPrediction) {
+             return false
+           }
 
-          if (bet.matches.match_result === 'draw') {
-            // Only draw for user if they didn't pick 'draw'
-            return userPrediction !== 'draw'
-          }
-
-          const opponentPrediction = bet.bet_predictions?.find(pred => pred.user_id !== user.id)?.prediction
-          const userCorrect = userPrediction === bet.matches.match_result
-          const opponentCorrect = opponentPrediction === bet.matches.match_result
-          return !userCorrect && !opponentCorrect
-        })
-        break
+           const userCorrect = userPrediction === bet.matches.match_result
+           const opponentCorrect = opponentPrediction === bet.matches.match_result
+           const isDraw = !userCorrect && !opponentCorrect
+           
+           return isDraw
+         })
+         break
       default: break
     }
 
+
+    
     setFilteredBets(filtered)
   }, [betHistory, activeFilter, user])
 
   const getBetStatusIcon = (status: string, matchResult?: string) => {
     switch (status) {
       case 'settled':
-        if (matchResult === 'draw') {
-          return <AlertCircle className="h-4 w-4 text-gray-500" />
-        }
         return <CheckCircle className="h-4 w-4 text-green-500" />
       case 'cancelled':
       case 'rejected':
@@ -194,9 +197,6 @@ export default function HistoryPage() {
   const getBetStatusColor = (status: string, matchResult?: string) => {
     switch (status) {
       case 'settled':
-        if (matchResult === 'draw') {
-          return 'bg-gray-100 text-gray-800'
-        }
         return 'bg-green-100 text-green-800'
       case 'cancelled':
       case 'rejected':
@@ -388,7 +388,7 @@ export default function HistoryPage() {
                         >
                           {getBetStatusIcon(bet.status, bet.matches?.match_result || undefined)}
                           <span className="ml-1 capitalize">
-                            {bet.status === 'settled' && bet.matches?.match_result === 'draw' ? 'Draw' : bet.status}
+                            {bet.status}
                           </span>
                         </Badge>
                       <span className="text-xs text-gray-500 font-mono">
@@ -496,8 +496,8 @@ export default function HistoryPage() {
                        
 
                        
-                       <div className="flex items-center space-x-2">
-                                                   <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                                               <div className="flex items-center space-x-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
                             bet.status === 'settled' 
                               ? (() => {
                                   const userPrediction = bet.bet_predictions?.find(p => p.user_id === user?.id)?.prediction

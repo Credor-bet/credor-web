@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore, useBettingStore } from '@/lib/store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -74,6 +75,7 @@ interface BetWithDetails {
 }
 
 export default function HistoryPage() {
+  const router = useRouter()
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [filteredBets, setFilteredBets] = useState<BetWithDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -229,6 +231,8 @@ export default function HistoryPage() {
     }
   }
 
+
+
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'upcoming', label: 'Upcoming' },
@@ -370,8 +374,18 @@ export default function HistoryPage() {
           </Card>
         ) : (
           filteredBets.map((bet) => (
-            <Card key={bet.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <CardContent className="p-0">
+            <Card 
+              key={bet.id} 
+              className="overflow-hidden hover:shadow-lg transition-shadow group"
+            >
+              <div 
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.preventDefault()
+                  router.push(`/history/${bet.id}`)
+                }}
+              >
+                <CardContent className="p-0">
                 {/* Bet Header with Date and Status */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b">
                   <div className="flex items-center justify-between">
@@ -382,15 +396,15 @@ export default function HistoryPage() {
                       </span>
                     </div>
                     <div className="flex items-center space-x-2">
-                                              <Badge 
-                          variant="secondary" 
-                          className={`text-xs font-medium ${getBetStatusColor(bet.status, bet.matches?.match_result || undefined)}`}
-                        >
-                          {getBetStatusIcon(bet.status, bet.matches?.match_result || undefined)}
-                          <span className="ml-1 capitalize">
-                            {bet.status}
-                          </span>
-                        </Badge>
+                      <Badge 
+                        variant="secondary" 
+                        className={`text-xs font-medium ${getBetStatusColor(bet.status, bet.matches?.match_result || undefined)}`}
+                      >
+                        {getBetStatusIcon(bet.status, bet.matches?.match_result || undefined)}
+                        <span className="ml-1 capitalize">
+                          {bet.status}
+                        </span>
+                      </Badge>
                       <span className="text-xs text-gray-500 font-mono">
                         #{bet.id.slice(0, 8).toUpperCase()}
                       </span>
@@ -535,7 +549,8 @@ export default function HistoryPage() {
                      </div>
                   </div>
                 </div>
-              </CardContent>
+                </CardContent>
+              </div>
             </Card>
           ))
         )}

@@ -19,10 +19,12 @@ import {
   UserX,
   Plus,
   UserMinus,
-  Shield
+  Shield,
+  Trophy
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
+import { CreateChallengeDialog } from '@/components/challenges/create-challenge-dialog'
 
 interface FriendRequest {
   request_id: string
@@ -702,16 +704,16 @@ export default function FriendsPage() {
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                        disabled
-                      >
-                        <MessageCircle className="h-4 w-4 mr-1" />
-                        Challenge
-                        <Badge variant="outline" className="ml-1 text-xs">Soon</Badge>
-                      </Button>
+                      <CreateChallengeDialog defaultOpponentId={friend.id}>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        >
+                          <Trophy className="h-4 w-4 mr-1" />
+                          Challenge
+                        </Button>
+                      </CreateChallengeDialog>
                       <Button
                         size="sm"
                         variant="ghost"

@@ -321,6 +321,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      cancel_bet: {
+        Args: {
+          p_bet_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       settle_bet: {
         Args: {
           p_bet_id: string

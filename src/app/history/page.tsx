@@ -80,7 +80,7 @@ export default function HistoryPage() {
   const [filteredBets, setFilteredBets] = useState<BetWithDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { user, wallet, refreshWallet } = useAuthStore()
-  const { betHistory, refreshBets } = useBettingStore()
+  const { betHistory, activeBets, refreshBets } = useBettingStore()
 
   // Load data on component mount
   useEffect(() => {
@@ -118,11 +118,13 @@ export default function HistoryPage() {
 
   // Filter bets (robust logic)
   useEffect(() => {
-    if (!betHistory || !user) return
+    if (!user) return
 
+    // Combine activeBets and betHistory for a complete view
+    const allBets = [...(activeBets || []), ...(betHistory || [])]
+    if (allBets.length === 0) return
 
-
-    let filtered = [...betHistory];
+    let filtered = [...allBets];
 
     switch (activeFilter) {
       case 'upcoming':
@@ -179,7 +181,7 @@ export default function HistoryPage() {
 
     
     setFilteredBets(filtered)
-  }, [betHistory, activeFilter, user])
+  }, [betHistory, activeBets, activeFilter, user])
 
   const getBetStatusIcon = (status: string, matchResult?: string) => {
     switch (status) {

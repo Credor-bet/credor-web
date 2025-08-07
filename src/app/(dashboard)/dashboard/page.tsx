@@ -14,9 +14,12 @@ import {
   Target,
   // Clock, // Removed unused import
   Zap,
-  Eye
+  Eye,
+  Plus
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { CreateChallengeDialog } from '@/components/challenges/create-challenge-dialog'
+import Link from 'next/link'
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -317,6 +320,41 @@ export default function DashboardPage() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Zap className="h-5 w-5" />
+              <span>Quick Actions</span>
+            </CardTitle>
+            <CardDescription>
+              Get started with challenges and competitions
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <CreateChallengeDialog>
+              <Button className="w-full bg-green-600 hover:bg-green-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Challenge
+              </Button>
+            </CreateChallengeDialog>
+            
+            <Link href="/dashboard/challenges">
+              <Button variant="outline" className="w-full">
+                <Trophy className="h-4 w-4 mr-2" />
+                View All Challenges
+              </Button>
+            </Link>
+            
+            <Link href="/dashboard/friends">
+              <Button variant="outline" className="w-full">
+                <Target className="h-4 w-4 mr-2" />
+                Challenge Friends
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

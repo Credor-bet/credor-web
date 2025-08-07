@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Toaster } from '@/components/ui/sonner'
 
 interface ClientProviderProps {
   children: React.ReactNode
@@ -22,5 +23,10 @@ export function ClientProvider({ children }: ClientProviderProps) {
     )
   }
 
-  return <>{children}</>
+  return (
+    <>
+      {children}
+      <Toaster />
+    </>
+  )
 } 

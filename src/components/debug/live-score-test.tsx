@@ -189,12 +189,15 @@ export function LiveScoreTest() {
               const selectedMatchData = availableMatches.find(m => m.id === selectedMatch)
               
               if (liveMatch) {
+                // Map live match status to component-expected status
+                const displayStatus = liveMatch.status === 'in_progress' ? 'live' : liveMatch.status
+                
                 return (
                   <div className="bg-white border rounded-lg p-4">
                     <LiveScoreDisplay
                       homeScore={liveMatch.home_score}
                       awayScore={liveMatch.away_score}
-                      status={liveMatch.status}
+                      status={displayStatus as 'scheduled' | 'live' | 'completed' | 'cancelled'}
                       homeTeam={selectedMatchData?.team_home?.name}
                       awayTeam={selectedMatchData?.team_away?.name}
                     />

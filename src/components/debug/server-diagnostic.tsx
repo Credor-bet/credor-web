@@ -92,7 +92,7 @@ export function ServerDiagnostic() {
         } catch (error) {
           addEvent('error', { 
             type: 'parse_error', 
-            error: error.message,
+            error: error instanceof Error ? error.message : String(error),
             rawData: event.data
           }, event.data)
         }

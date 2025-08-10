@@ -61,9 +61,15 @@ export async function fetchUpcomingMatches(limit: number = 10): Promise<Upcoming
 
     console.log(`✅ Found ${matches?.length || 0} upcoming matches`)
     
-    // Log the matches for debugging
-    if (matches && matches.length > 0) {
-      console.log('📅 Upcoming matches:', matches.map(match => ({
+    // Transform and log the matches for debugging
+    const transformedMatches = matches?.map(match => ({
+      ...match,
+      home_team: Array.isArray(match.home_team) ? match.home_team[0] : match.home_team,
+      away_team: Array.isArray(match.away_team) ? match.away_team[0] : match.away_team
+    })) || []
+
+    if (transformedMatches.length > 0) {
+      console.log('📅 Upcoming matches:', transformedMatches.map(match => ({
         fixture_id: match.fixture_id,
         start_time: match.start_time,
         status: match.status,
@@ -71,7 +77,7 @@ export async function fetchUpcomingMatches(limit: number = 10): Promise<Upcoming
       })))
     }
 
-    return matches || []
+    return transformedMatches
   } catch (error) {
     console.error('💥 Error in fetchUpcomingMatches:', error)
     return []
@@ -119,7 +125,14 @@ export async function fetchLiveAndSoonMatches(): Promise<UpcomingMatch[]> {
 
     console.log(`⚡ Found ${matches?.length || 0} live or soon-to-start matches`)
     
-    return matches || []
+    // Transform matches to handle potential array returns from foreign key joins
+    const transformedMatches = matches?.map(match => ({
+      ...match,
+      home_team: Array.isArray(match.home_team) ? match.home_team[0] : match.home_team,
+      away_team: Array.isArray(match.away_team) ? match.away_team[0] : match.away_team
+    })) || []
+    
+    return transformedMatches
   } catch (error) {
     console.error('💥 Error in fetchLiveAndSoonMatches:', error)
     return []
@@ -169,7 +182,14 @@ export async function fetchMatchesWithActiveBets(): Promise<UpcomingMatch[]> {
 
     console.log(`🎲 Found ${matches?.length || 0} matches with active bets`)
     
-    return matches || []
+    // Transform matches to handle potential array returns from foreign key joins
+    const transformedMatches = matches?.map(match => ({
+      ...match,
+      home_team: Array.isArray(match.home_team) ? match.home_team[0] : match.home_team,
+      away_team: Array.isArray(match.away_team) ? match.away_team[0] : match.away_team
+    })) || []
+    
+    return transformedMatches
   } catch (error) {
     console.error('💥 Error in fetchMatchesWithActiveBets:', error)
     return []

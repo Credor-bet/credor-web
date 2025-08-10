@@ -125,9 +125,13 @@ export function LiveMatchScore({
         {showConnectionStatus && (
           <div className="flex items-center">
             {isConnected ? (
-              <Wifi className="h-3 w-3 text-green-500" title="Connected to live updates" />
+              <div title="Connected to live updates">
+                <Wifi className="h-3 w-3 text-green-500" />
+              </div>
             ) : (
-              <WifiOff className="h-3 w-3 text-gray-400" title="Not connected to live updates" />
+              <div title="Not connected to live updates">
+                <WifiOff className="h-3 w-3 text-gray-400" />
+              </div>
             )}
           </div>
         )}
@@ -177,9 +181,13 @@ export function LiveMatchScore({
               {showConnectionStatus && (
                 <div className="flex items-center">
                   {isConnected ? (
-                    <Wifi className="h-4 w-4 text-green-500" title="Live updates active" />
+                    <div title="Live updates active">
+                      <Wifi className="h-4 w-4 text-green-500" />
+                    </div>
                   ) : (
-                    <WifiOff className="h-4 w-4 text-gray-400" title="Live updates inactive" />
+                    <div title="Live updates inactive">
+                      <WifiOff className="h-4 w-4 text-gray-400" />
+                    </div>
                   )}
                 </div>
               )}
@@ -242,9 +250,13 @@ export function LiveMatchScore({
                 {isConnected ? 'Live' : 'Static'}
               </div>
               {isConnected ? (
-                <Wifi className="h-4 w-4 text-green-500" title="Live updates active" />
+                <div title="Live updates active">
+                  <Wifi className="h-4 w-4 text-green-500" />
+                </div>
               ) : (
-                <WifiOff className="h-4 w-4 text-gray-400" title="Live updates inactive" />
+                <div title="Live updates inactive">
+                  <WifiOff className="h-4 w-4 text-gray-400" />
+                </div>
               )}
             </div>
           )}

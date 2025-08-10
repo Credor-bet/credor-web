@@ -14,7 +14,6 @@ export function MatchDebug() {
   
   // Subscribe to all events for debugging
   useWebSocket({
-    fixtureIds: [],
     enableNotifications: false,
     enableErrorToasts: false
   })

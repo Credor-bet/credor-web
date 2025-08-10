@@ -6,6 +6,7 @@ export interface Match {
   sport_id: string
   home_team_id: string
   away_team_id: string
+  fixture_id: string
   start_time: string
   status: 'scheduled' | 'live' | 'completed' | 'cancelled'
   home_score?: number

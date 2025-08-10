@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { LiveMatchScore } from '@/components/matches/live-match-score'
 
 interface ChallengeCardProps {
   challenge: Challenge
@@ -397,21 +398,11 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               {challenge.match && (
-                <div className="flex items-center space-x-2">
-                  <div className="flex items-center">
-                    {challenge.match.home_team.logo_url && (
-                      <img src={challenge.match.home_team.logo_url} alt="" className="h-6 w-6 mr-1" />
-                    )}
-                    <span className="text-sm font-medium">{challenge.match.home_team.name}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">vs</span>
-                  <div className="flex items-center">
-                    {challenge.match.away_team.logo_url && (
-                      <img src={challenge.match.away_team.logo_url} alt="" className="h-6 w-6 mr-1" />
-                    )}
-                    <span className="text-sm font-medium">{challenge.match.away_team.name}</span>
-                  </div>
-                </div>
+                <LiveMatchScore 
+                  match={challenge.match} 
+                  variant="minimal" 
+                  showConnectionStatus={false}
+                />
               )}
             </div>
             
@@ -563,45 +554,26 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
 
         {/* Match Information */}
         {challenge.match && (
-          <Card className="bg-gray-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center">
-                    {challenge.match.home_team.logo_url && (
-                      <img src={challenge.match.home_team.logo_url} alt="" className="h-8 w-8 mr-2" />
-                    )}
-                    <div>
-                      <div className="font-medium">{challenge.match.home_team.name}</div>
-                      <div className="text-xs text-muted-foreground">Home</div>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center">
-                    <div className="text-sm font-medium">VS</div>
-                    <Badge variant="outline" className="text-xs">
-                      {challenge.match.sport?.name}
-                    </Badge>
-                  </div>
-                  
-                  <div className="flex items-center">
-                    {challenge.match.away_team.logo_url && (
-                      <img src={challenge.match.away_team.logo_url} alt="" className="h-8 w-8 mr-2" />
-                    )}
-                    <div>
-                      <div className="font-medium">{challenge.match.away_team.name}</div>
-                      <div className="text-xs text-muted-foreground">Away</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-center mt-3 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4 mr-1" />
-                {formatDate(challenge.match.start_time)}
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-2">
+            <LiveMatchScore 
+              match={challenge.match} 
+              variant="compact" 
+              showConnectionStatus={challenge.match.status === 'live'}
+            />
+            
+            <div className="flex items-center justify-center text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4 mr-1" />
+              {formatDate(challenge.match.start_time)}
+              {challenge.match.sport?.name && (
+                <>
+                  <span className="mx-2">•</span>
+                  <Badge variant="outline" className="text-xs">
+                    {challenge.match.sport.name}
+                  </Badge>
+                </>
+              )}
+            </div>
+          </div>
         )}
       </CardHeader>
 

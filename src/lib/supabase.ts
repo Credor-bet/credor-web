@@ -1,11 +1,29 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient, createServerClient } from '@supabase/ssr'
 
-// Client-side Supabase client using Next.js auth helpers (cookie-based)
-export const supabase = createClientComponentClient()
+// Client-side Supabase client for browser usage
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
-// Server-side Supabase client
-export const createServerSupabaseClient = () => {
-  return createClientComponentClient()
+// Server-side Supabase client factory
+export const createServerSupabaseClient = (cookieStore: any) => {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet: any[]) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
 }
 
 // Database types based on the schema

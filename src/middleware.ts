@@ -1,12 +1,35 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
   console.log('🚀 MIDDLEWARE IS RUNNING for path:', req.nextUrl.pathname)
   
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+  let supabaseResponse = NextResponse.next({
+    request: req
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => req.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request: req
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
   const { data: { session } } = await supabase.auth.getSession()
   const { pathname } = req.nextUrl
 
@@ -27,7 +50,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL('/signin', req.url))
     }
     console.log('Middleware: No session, allowing public route')
-    return res
+    return supabaseResponse
   }
 
   // User has session - check email confirmation and profile completion
@@ -47,12 +70,12 @@ export async function middleware(req: NextRequest) {
         // If on confirm-email page, allow access
         if (pathname.startsWith('/confirm-email')) {
           console.log('Middleware: Email not confirmed, allowing confirm-email page')
-          return res
+          return supabaseResponse
         }
         // If on auth pages, allow access
         if (authRoutes.some(route => pathname.startsWith(route))) {
           console.log('Middleware: Email not confirmed, allowing auth page access')
-          return res
+          return supabaseResponse
         }
         // Otherwise redirect to email confirmation
         console.log('Middleware: Email not confirmed, redirecting to /confirm-email')
@@ -66,7 +89,7 @@ export async function middleware(req: NextRequest) {
         // If on profile-completion page, allow access
         if (pathname.startsWith('/profile-completion')) {
           console.log('Middleware: Profile incomplete, allowing profile-completion page')
-          return res
+          return supabaseResponse
         }
         // Otherwise redirect to profile completion
         console.log('Middleware: Profile incomplete, redirecting to /profile-completion')
@@ -81,16 +104,16 @@ export async function middleware(req: NextRequest) {
 
       // Allow access to protected routes
       console.log('Middleware: Session and profile complete, allowing access')
-      return res
+      return supabaseResponse
     } catch (error) {
       console.error('Middleware: Error checking profile:', error)
       // On error, allow the request to continue
-      return res
+      return supabaseResponse
     }
   }
 
   console.log('Middleware: Allowing request to continue');
-  return res;
+  return supabaseResponse;
 }
 
 export const config = {

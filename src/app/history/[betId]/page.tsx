@@ -283,7 +283,7 @@ export default function BetDetailsPage() {
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold">
-                  {formatCurrency(getTotalStake(), wallet?.currency || 'USD')}
+                  {formatCurrency(getTotalStake(), wallet?.currency || 'CREDORR')}
                 </div>
                 <p className="text-blue-100 text-sm">Total Stake</p>
               </div>
@@ -412,7 +412,7 @@ export default function BetDetailsPage() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Amount:</span>
                         <span className="font-semibold">
-                          {formatCurrency(userPrediction?.amount || 0, wallet?.currency || 'USD')}
+                          {formatCurrency(userPrediction?.amount || 0, wallet?.currency || 'CREDORR')}
                         </span>
                       </div>
                     </div>
@@ -465,7 +465,7 @@ export default function BetDetailsPage() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Amount:</span>
                         <span className="font-semibold">
-                          {formatCurrency(opponentPrediction?.amount || 0, wallet?.currency || 'USD')}
+                          {formatCurrency(opponentPrediction?.amount || 0, wallet?.currency || 'CREDORR')}
                         </span>
                       </div>
                     </div>

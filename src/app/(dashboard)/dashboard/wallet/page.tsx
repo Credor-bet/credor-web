@@ -17,7 +17,7 @@ import {
   CreditCard,
   Globe,
   Clock,
-  DollarSign,
+  Coins,
   ChevronRight
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -107,7 +107,7 @@ export default function WalletPage() {
     } else if (transaction.type === 'withdrawal' || transaction.type === 'bet_loss') {
       return <ArrowUpRight className="h-4 w-4 text-red-600" />
     }
-    return <DollarSign className="h-4 w-4 text-blue-600" />
+    return <Coins className="h-4 w-4 text-blue-600" />
   }
 
   const getTransactionColor = (transaction: Transaction) => {
@@ -181,11 +181,11 @@ export default function WalletPage() {
         <CardContent>
           <div className="space-y-2">
             <div className="text-3xl font-bold">
-              {formatCurrency(wallet?.balance || 0, wallet?.currency || 'USD')}
+              {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
             </div>
             {wallet?.locked_balance && wallet.locked_balance > 0 && (
               <div className="text-blue-100 text-sm">
-                {formatCurrency(wallet.locked_balance, wallet.currency || 'USD')} locked in active bets
+                {formatCurrency(wallet.locked_balance, wallet.currency || 'CREDORR')} locked in active bets
               </div>
             )}
           </div>

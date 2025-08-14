@@ -270,7 +270,7 @@ export default function HistoryPage() {
         <div className="flex items-center space-x-2 bg-green-50 px-4 py-2 rounded-lg">
           <Wallet className="h-5 w-5 text-green-600" />
           <span className="font-semibold text-green-700">
-            {formatCurrency(wallet?.balance || 0, wallet?.currency || 'USD')}
+            {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
           </span>
         </div>
       </div>
@@ -545,7 +545,7 @@ export default function HistoryPage() {
                             )}
                           </div>
                          <span className="text-sm font-semibold text-gray-800">
-                           {formatCurrency(bet.min_opponent_amount, wallet?.currency || 'USD')}
+                           {formatCurrency(bet.min_opponent_amount, wallet?.currency || 'CREDORR')}
                          </span>
                        </div>
                      </div>

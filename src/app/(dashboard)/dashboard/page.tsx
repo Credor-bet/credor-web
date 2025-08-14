@@ -10,7 +10,7 @@ import {
   TrendingUp, 
   // Users, // Removed unused import
   Trophy,
-  DollarSign,
+  Coins,
   Target,
   // Clock, // Removed unused import
   Zap,
@@ -176,11 +176,11 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Wallet Balance</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Coins className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(wallet?.balance || 0, wallet?.currency || 'USD')}
+              {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
             </div>
             <p className="text-xs text-muted-foreground">
               Available to bet

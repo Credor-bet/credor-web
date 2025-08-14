@@ -24,7 +24,7 @@ import {
   Users,
   Clock,
   Target,
-  DollarSign,
+  Coins,
   ChevronRight,
   ChevronLeft,
   Plus,
@@ -165,7 +165,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
         ? friends.find(f => f.id === selectedOpponentId)?.username || 'your friend'
         : 'anyone'
       
-      toast.success(`Challenge created successfully! You staked ${formatCurrency(parseFloat(amount), wallet?.currency || 'USD')} on ${
+      toast.success(`Challenge created successfully! You staked ${formatCurrency(parseFloat(amount), wallet?.currency || 'CREDORR')} on ${
         prediction === 'home_win' ? selectedMatch.home_team.name :
         prediction === 'away_win' ? selectedMatch.away_team.name : 'Draw'
       }. ${challengeType === 'friend' ? `${opponentName} will be notified.` : 'It\'s now available for others to accept.'}`, {
@@ -191,7 +191,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
             duration: 5000
           })
         } else if (error.message.includes('Insufficient funds') || error.message.includes('insufficient balance')) {
-          toast.error(`Insufficient wallet balance. You need ${formatCurrency(parseFloat(amount), wallet?.currency || 'USD')} but only have ${formatCurrency(wallet?.balance || 0, wallet?.currency || 'USD')} available.`)
+          toast.error(`Insufficient wallet balance. You need ${formatCurrency(parseFloat(amount), wallet?.currency || 'CREDORR')} but only have ${formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')} available.`)
         } else if (error.message.includes('Match not found')) {
           toast.error('The selected match is no longer available. Please choose a different match.')
         } else if (error.message.includes('User not found')) {
@@ -541,7 +541,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
   const renderStakeStep = () => (
     <div className="space-y-4">
       <div className="text-center">
-        <DollarSign className="h-12 w-12 text-green-600 mx-auto mb-4" />
+        <Coins className="h-12 w-12 text-green-600 mx-auto mb-4" />
         <h3 className="text-lg font-semibold">Set Your Stake</h3>
         <p className="text-sm text-muted-foreground">How much would you like to bet?</p>
       </div>
@@ -550,7 +550,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
         <CardContent className="p-4">
           <div className="text-sm text-muted-foreground mb-2">Available Balance</div>
           <div className="text-2xl font-bold">
-            {formatCurrency(wallet?.balance || 0, wallet?.currency || 'USD')}
+            {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
           </div>
         </CardContent>
       </Card>
@@ -606,7 +606,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
             }}
             disabled={(wallet?.balance || 0) < quickAmount}
           >
-            ${quickAmount}
+            {quickAmount} CR
           </Button>
         ))}
       </div>
@@ -701,11 +701,11 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Your Stake:</span>
-              <span className="font-medium">{formatCurrency(parseFloat(amount) || 0, wallet?.currency || 'USD')}</span>
+              <span className="font-medium">{formatCurrency(parseFloat(amount) || 0, wallet?.currency || 'CREDORR')}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Min. Opponent Stake:</span>
-              <span className="font-medium">{formatCurrency(parseFloat(minOpponentAmount) || 0, wallet?.currency || 'USD')}</span>
+              <span className="font-medium">{formatCurrency(parseFloat(minOpponentAmount) || 0, wallet?.currency || 'CREDORR')}</span>
             </div>
           </div>
         </CardContent>

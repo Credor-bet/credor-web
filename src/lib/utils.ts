@@ -53,11 +53,28 @@ export function formatDate(dateString: string): string {
   }).format(date)
 }
 
-export function formatCurrency(amount: number, currency: string = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(amount)
+export function formatCurrency(amount: number, currency: string = 'CREDORR'): string {
+  if (currency === 'CREDORR') {
+    // Format Credorr tokens with custom formatting
+    return `${new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(amount)} CR`
+  }
+  
+  // Fallback to standard currency formatting for other currencies
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount)
+  } catch (error) {
+    // If currency is not recognized, fall back to number formatting with currency suffix
+    return `${new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount)} ${currency}`
+  }
 }
 
 export function getInitials(name: string): string {

@@ -11,7 +11,7 @@ import {
   ArrowLeft,
   ArrowUpRight, 
   ArrowDownLeft,
-  DollarSign,
+  Coins,
   Filter
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -70,7 +70,7 @@ export default function TransactionsPage() {
     } else if (transaction.type === 'withdrawal' || transaction.type === 'bet_loss') {
       return <ArrowUpRight className="h-5 w-5 text-red-600" />
     }
-    return <DollarSign className="h-5 w-5 text-blue-600" />
+    return <Coins className="h-5 w-5 text-blue-600" />
   }
 
   const getTransactionColor = (transaction: Transaction) => {
@@ -138,7 +138,7 @@ export default function TransactionsPage() {
           <div className="space-y-4">
             {transactions.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
-                <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <Coins className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg font-medium">No transactions yet</p>
                 <p className="text-sm">Your transaction history will appear here</p>
               </div>

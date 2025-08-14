@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { 
   Clock,
   Trophy,
-  DollarSign,
+  Coins,
   Users,
   Target,
   Calendar,
@@ -120,12 +120,12 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
     }
 
     if (parseFloat(stakeAmount) < challenge.min_opponent_amount) {
-      toast.error(`Minimum stake is ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'USD')}`)
+      toast.error(`Minimum stake is ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}`)
       return
     }
 
     if (parseFloat(stakeAmount) > (wallet?.balance || 0)) {
-      toast.error(`Insufficient balance. You have ${formatCurrency(wallet?.balance || 0, wallet?.currency || 'USD')} available`)
+      toast.error(`Insufficient balance. You have ${formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')} available`)
       return
     }
 
@@ -148,7 +148,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       
       // Dismiss progress toast and show success
       toast.dismiss(progressToast)
-      toast.success(`Challenge accepted! You staked ${formatCurrency(parseFloat(stakeAmount), wallet?.currency || 'USD')} on ${
+      toast.success(`Challenge accepted! You staked ${formatCurrency(parseFloat(stakeAmount), wallet?.currency || 'CREDORR')} on ${
         prediction === 'home_win' ? challenge.match?.home_team.name :
         prediction === 'away_win' ? challenge.match?.away_team.name : 'Draw'
       }`, {
@@ -276,7 +276,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
       const refundAmount = userPrediction?.amount || 0
       
-      toast.success(`Challenge cancelled successfully! ${refundAmount > 0 ? `${formatCurrency(refundAmount, wallet?.currency || 'USD')} has been refunded to your wallet.` : ''}`, {
+      toast.success(`Challenge cancelled successfully! ${refundAmount > 0 ? `${formatCurrency(refundAmount, wallet?.currency || 'CREDORR')} has been refunded to your wallet.` : ''}`, {
         duration: 5000
       })
       
@@ -339,7 +339,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
       const refundAmount = userPrediction?.amount || 0
       
-      toast.success(`You have left the challenge. ${formatCurrency(refundAmount, wallet?.currency || 'USD')} has been refunded to your wallet.`, {
+      toast.success(`You have left the challenge. ${formatCurrency(refundAmount, wallet?.currency || 'CREDORR')} has been refunded to your wallet.`, {
         duration: 5000
       })
       
@@ -412,7 +412,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
               </Badge>
               {creatorPrediction && (
                 <div className="text-xs text-muted-foreground">
-                  {formatCurrency(creatorPrediction.amount, wallet?.currency || 'USD')}
+                  {formatCurrency(creatorPrediction.amount, wallet?.currency || 'CREDORR')}
                 </div>
               )}
             </div>
@@ -586,14 +586,14 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
               {creatorPrediction ? getPredictionText(creatorPrediction.prediction) : 'Unknown'}
             </div>
             <div className="text-sm text-green-600">
-              {creatorPrediction && formatCurrency(creatorPrediction.amount, wallet?.currency || 'USD')}
+              {creatorPrediction && formatCurrency(creatorPrediction.amount, wallet?.currency || 'CREDORR')}
             </div>
           </div>
           
           <div>
             <div className="text-sm text-muted-foreground">Min. Opponent Stake</div>
             <div className="font-medium">
-              {formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'USD')}
+              {formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}
             </div>
             {challenge.max_participants > 2 && (
               <div className="text-xs text-muted-foreground">
@@ -609,7 +609,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
             <div className="text-sm text-muted-foreground">Your Prediction</div>
             <div className="font-medium">{getPredictionText(userPrediction.prediction)}</div>
             <div className="text-sm text-blue-600">
-              {formatCurrency(userPrediction.amount, wallet?.currency || 'USD')}
+              {formatCurrency(userPrediction.amount, wallet?.currency || 'CREDORR')}
             </div>
           </div>
         )}
@@ -794,7 +794,7 @@ function AcceptChallengeForm({
       <div className="p-3 bg-blue-50 rounded-lg">
         <div className="text-xs text-muted-foreground">Available Balance</div>
         <div className="text-lg font-bold">
-          {formatCurrency(wallet?.balance || 0, wallet?.currency || 'USD')}
+          {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
         </div>
       </div>
 
@@ -854,7 +854,7 @@ function AcceptChallengeForm({
         <Input
           id="stake"
           type="number"
-          placeholder={`Min ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'USD')}`}
+          placeholder={`Min ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}`}
           value={stakeAmount}
           onChange={(e) => setStakeAmount(e.target.value)}
           min={challenge.min_opponent_amount}
@@ -863,7 +863,7 @@ function AcceptChallengeForm({
         />
         <div className="flex justify-between items-center mt-1">
           <p className="text-xs text-muted-foreground">
-            Min: {formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'USD')}
+            Min: {formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}
           </p>
           {stakeAmount && parseFloat(stakeAmount) < challenge.min_opponent_amount && (
             <p className="text-xs text-red-500 font-medium">
@@ -887,9 +887,9 @@ function AcceptChallengeForm({
               className={`h-7 text-xs ${isDisabled ? 'opacity-50' : ''} ${isBelowMinimum ? 'border-red-200 text-red-400' : ''}`}
               onClick={() => setStakeAmount(quickAmount.toString())}
               disabled={isDisabled}
-              title={isBelowMinimum ? `Below minimum of ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'USD')}` : ''}
+              title={isBelowMinimum ? `Below minimum of ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}` : ''}
             >
-              ${quickAmount}
+              {quickAmount} CR
             </Button>
           )
         })}
@@ -919,7 +919,7 @@ function AcceptChallengeForm({
           <p className="text-xs text-red-500 text-center">
             {!stakeAmount 
               ? "Please enter a stake amount" 
-              : `Minimum stake is ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'USD')}`
+              : `Minimum stake is ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}`
             }
           </p>
         )}
@@ -1049,7 +1049,7 @@ function CancelChallengeForm({ challenge, onCancel, isLoading }: CancelChallenge
       {userPrediction && (
         <div className="p-3 bg-gray-50 rounded-lg">
           <div className="text-sm text-muted-foreground">Your Stake</div>
-          <div className="font-medium">{formatCurrency(userPrediction.amount, 'USD')}</div>
+          <div className="font-medium">{formatCurrency(userPrediction.amount, 'CREDORR')}</div>
           <div className="text-xs text-green-600">Will be refunded</div>
         </div>
       )}
@@ -1107,7 +1107,7 @@ function LeaveChallengeForm({ challenge, onLeave, isLoading }: LeaveChallengeFor
       {userPrediction && (
         <div className="p-3 bg-gray-50 rounded-lg">
           <div className="text-sm text-muted-foreground">Your Current Stake</div>
-          <div className="font-medium">{formatCurrency(userPrediction.amount, 'USD')}</div>
+          <div className="font-medium">{formatCurrency(userPrediction.amount, 'CREDORR')}</div>
           <div className="text-xs text-green-600">Will be refunded</div>
         </div>
       )}

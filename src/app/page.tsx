@@ -105,7 +105,7 @@ export default function HomePage() {
                 <Button 
                   size="lg"
                   variant="outline"
-                  className="w-full sm:w-auto px-12 py-6 text-lg font-semibold border-2 border-white/30 text-white hover:bg-white/10 hover:border-white/50 font-dm-sans backdrop-blur-custom transition-all duration-300"
+                  className="w-full sm:w-auto px-12 py-6 text-lg font-semibold bg-black/20 border-2 border-white/60 text-white hover:bg-black/40 hover:border-white/80 font-dm-sans backdrop-blur-custom transition-all duration-300"
                   onClick={handleLogin}
                 >
                   Login

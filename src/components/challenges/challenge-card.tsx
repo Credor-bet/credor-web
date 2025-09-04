@@ -564,11 +564,11 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
             <div className="flex items-center justify-center text-sm text-muted-foreground">
               <Calendar className="h-4 w-4 mr-1" />
               {formatDate(challenge.match.start_time)}
-              {challenge.match.sport?.name && (
+              {(challenge.match.competition || challenge.match.sport?.name) && (
                 <>
                   <span className="mx-2">•</span>
                   <Badge variant="outline" className="text-xs">
-                    {challenge.match.sport.name}
+                    {challenge.match.competition || challenge.match.sport?.name}
                   </Badge>
                 </>
               )}

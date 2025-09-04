@@ -45,6 +45,7 @@ interface BetWithDetails {
     match_result: string | null
     home_score: number | null
     away_score: number | null
+    competition: string | null
     home_team?: {
       name: string
       logo_url: string | null
@@ -54,6 +55,10 @@ interface BetWithDetails {
       name: string
       logo_url: string | null
       cloudinary_logo_url?: string | null
+    }
+    sport?: {
+      id: string
+      name: string
     }
   }
   creator?: {
@@ -298,7 +303,7 @@ export default function BetDetailsPage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Match Details</h3>
                 <Badge variant="outline" className="bg-green-50 text-green-700">
-                  Premier League
+                  {bet.matches?.competition || bet.matches?.sport?.name || 'Unknown League'}
                 </Badge>
               </div>
 

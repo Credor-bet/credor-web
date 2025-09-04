@@ -37,9 +37,18 @@ interface Bet {
   created_at: string
   updated_at: string
   settled_at: string | null
-  // Enhanced fields from joins
+  fixture_id: string // Add the fixture_id field
+  home_team?: {
+    name: string
+    logo_url: string | null
+    cloudinary_logo_url?: string | null
+  }
+  away_team?: {
+    name: string
+    logo_url: string | null
+    cloudinary_logo_url?: string | null
+  }
   matches?: {
-    id: string
     home_team_id: string
     away_team_id: string
     start_time: string
@@ -47,14 +56,15 @@ interface Bet {
     match_result: string | null
     home_score: number | null
     away_score: number | null
-    fixture_id: string // Add the fixture_id field
     home_team?: {
       name: string
       logo_url: string | null
+      cloudinary_logo_url?: string | null
     }
     away_team?: {
       name: string
       logo_url: string | null
+      cloudinary_logo_url?: string | null
     }
   }
   creator?: {

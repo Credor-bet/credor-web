@@ -56,6 +56,7 @@ interface Bet {
     match_result: string | null
     home_score: number | null
     away_score: number | null
+    competition: string | null
     home_team?: {
       name: string
       logo_url: string | null
@@ -65,6 +66,10 @@ interface Bet {
       name: string
       logo_url: string | null
       cloudinary_logo_url?: string | null
+    }
+    sport?: {
+      id: string
+      name: string
     }
   }
   creator?: {
@@ -305,7 +310,11 @@ export const useBettingStore = create<BettingStore>((set) => ({
              .from('bets')
              .select(`
                *,
-               matches!bets_match_id_fkey(*, home_team:sports_teams!matches_home_team_id_fkey(*), away_team:sports_teams!matches_away_team_id_fkey(*)),
+               matches!bets_match_id_fkey(*, 
+                 home_team:sports_teams!matches_home_team_id_fkey(*), 
+                 away_team:sports_teams!matches_away_team_id_fkey(*),
+                 sport:sports(*)
+               ),
                bet_predictions(user_id, prediction, amount),
                creator:users!bets_creator_id_fkey(username, avatar_url),
                opponent:users!bets_opponent_id_fkey(username, avatar_url)

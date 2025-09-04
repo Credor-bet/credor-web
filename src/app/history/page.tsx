@@ -42,6 +42,7 @@ interface BetWithDetails {
     match_result: string | null
     home_score: number | null
     away_score: number | null
+    competition?: string | null
     home_team?: {
       name: string
       logo_url: string | null
@@ -51,6 +52,10 @@ interface BetWithDetails {
       name: string
       logo_url: string | null
       cloudinary_logo_url?: string | null
+    }
+    sport?: {
+      id: string
+      name: string
     }
   }
   home_team?: {
@@ -426,7 +431,7 @@ export default function HistoryPage() {
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                         <span className="text-sm font-semibold text-gray-800">
-                          Premier League
+                          {bet.matches?.competition || bet.matches?.sport?.name || 'Unknown League'}
                         </span>
                       </div>
                       <Badge variant="outline" className="text-xs font-medium bg-gray-50">

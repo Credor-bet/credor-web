@@ -12,6 +12,7 @@ export interface Match {
   home_score?: number
   away_score?: number
   result?: 'home_win' | 'away_win' | 'draw'
+  competition?: string
   home_team: {
     id: string
     name: string

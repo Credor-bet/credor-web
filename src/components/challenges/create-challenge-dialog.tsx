@@ -359,9 +359,19 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                 }}
               >
                 <div className="flex items-center">
-                  {team.logo_url && (
-                    <img src={team.logo_url} alt="" className="h-6 w-6 mr-2" />
-                  )}
+                                  {team.cloudinary_logo_url || team.logo_url ? (
+                  <img 
+                    src={team.cloudinary_logo_url || team.logo_url} 
+                    alt="" 
+                    className="h-6 w-6 mr-2 rounded-full object-cover" 
+                  />
+                ) : (
+                  <div className="h-6 w-6 mr-2 bg-gradient-to-br from-gray-500 to-gray-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">
+                      {team.name?.slice(0, 1).toUpperCase()}
+                    </span>
+                  </div>
+                )}
                   <div className="text-left">
                     <div className="font-medium">{team.name}</div>
                     {team.country && (
@@ -381,8 +391,18 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           {selectedHomeTeam && (
             <div className="flex items-center justify-between p-2 bg-blue-50 rounded">
               <div className="flex items-center">
-                {selectedHomeTeam.logo_url && (
-                  <img src={selectedHomeTeam.logo_url} alt="" className="h-6 w-6 mr-2" />
+                {selectedHomeTeam.cloudinary_logo_url || selectedHomeTeam.logo_url ? (
+                  <img 
+                    src={selectedHomeTeam.cloudinary_logo_url || selectedHomeTeam.logo_url} 
+                    alt="" 
+                    className="h-6 w-6 mr-2 rounded-full object-cover" 
+                  />
+                ) : (
+                  <div className="h-6 w-6 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">
+                      {selectedHomeTeam.name?.slice(0, 1).toUpperCase()}
+                    </span>
+                  </div>
                 )}
                 <span className="font-medium">{selectedHomeTeam.name}</span>
                 <Badge variant="secondary" className="ml-2">Home</Badge>
@@ -400,8 +420,18 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           {selectedAwayTeam && (
             <div className="flex items-center justify-between p-2 bg-red-50 rounded">
               <div className="flex items-center">
-                {selectedAwayTeam.logo_url && (
-                  <img src={selectedAwayTeam.logo_url} alt="" className="h-6 w-6 mr-2" />
+                {selectedAwayTeam.cloudinary_logo_url || selectedAwayTeam.logo_url ? (
+                  <img 
+                    src={selectedAwayTeam.cloudinary_logo_url || selectedAwayTeam.logo_url} 
+                    alt="" 
+                    className="h-6 w-6 mr-2 rounded-full object-cover" 
+                  />
+                ) : (
+                  <div className="h-6 w-6 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">
+                      {selectedAwayTeam.name?.slice(0, 1).toUpperCase()}
+                    </span>
+                  </div>
                 )}
                 <span className="font-medium">{selectedAwayTeam.name}</span>
                 <Badge variant="secondary" className="ml-2">Away</Badge>
@@ -437,16 +467,36 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="flex items-center">
-                      {match.home_team.logo_url && (
-                        <img src={match.home_team.logo_url} alt="" className="h-6 w-6 mr-2" />
-                      )}
-                      <span className="font-medium">{match.home_team.name}</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">vs</span>
-                    <div className="flex items-center">
-                      {match.away_team.logo_url && (
-                        <img src={match.away_team.logo_url} alt="" className="h-6 w-6 mr-2" />
-                      )}
+                                      {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
+                  <img 
+                    src={match.home_team.cloudinary_logo_url || match.home_team.logo_url} 
+                    alt="" 
+                    className="h-6 w-6 mr-2 rounded-full object-cover" 
+                  />
+                ) : (
+                  <div className="h-6 w-6 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">
+                      {match.home_team.name?.slice(0, 1).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <span className="font-medium">{match.home_team.name}</span>
+              </div>
+              <span className="text-sm text-muted-foreground">vs</span>
+              <div className="flex items-center">
+                {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
+                  <img 
+                    src={match.away_team.cloudinary_logo_url || match.away_team.logo_url} 
+                    alt="" 
+                    className="h-6 w-6 mr-2 rounded-full object-cover" 
+                  />
+                ) : (
+                  <div className="h-6 w-6 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">
+                      {match.away_team.name?.slice(0, 1).toUpperCase()}
+                    </span>
+                  </div>
+                )}
                       <span className="font-medium">{match.away_team.name}</span>
                     </div>
                   </div>
@@ -480,15 +530,35 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="flex items-center">
-                  {selectedMatch.home_team.logo_url && (
-                    <img src={selectedMatch.home_team.logo_url} alt="" className="h-8 w-8 mr-2" />
+                  {selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url ? (
+                    <img 
+                      src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url} 
+                      alt="" 
+                      className="h-8 w-8 mr-2 rounded-full object-cover" 
+                    />
+                  ) : (
+                    <div className="h-8 w-8 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-bold">
+                        {selectedMatch.home_team.name?.slice(0, 1).toUpperCase()}
+                      </span>
+                    </div>
                   )}
                   <span className="font-medium">{selectedMatch.home_team.name}</span>
                 </div>
                 <span className="text-sm text-muted-foreground">vs</span>
                 <div className="flex items-center">
-                  {selectedMatch.away_team.logo_url && (
-                    <img src={selectedMatch.away_team.logo_url} alt="" className="h-8 w-8 mr-2" />
+                  {selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url ? (
+                    <img 
+                      src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url} 
+                      alt="" 
+                      className="h-8 w-8 mr-2 rounded-full object-cover" 
+                    />
+                  ) : (
+                    <div className="h-8 w-8 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-bold">
+                        {selectedMatch.away_team.name?.slice(0, 1).toUpperCase()}
+                      </span>
+                    </div>
                   )}
                   <span className="font-medium">{selectedMatch.away_team.name}</span>
                 </div>
@@ -663,15 +733,35 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center">
-                    {selectedMatch.home_team.logo_url && (
-                      <img src={selectedMatch.home_team.logo_url} alt="" className="h-6 w-6 mr-2" />
+                    {selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url ? (
+                      <img 
+                        src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url} 
+                        alt="" 
+                        className="h-6 w-6 mr-2 rounded-full object-cover" 
+                      />
+                    ) : (
+                      <div className="h-6 w-6 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">
+                          {selectedMatch.home_team.name?.slice(0, 1).toUpperCase()}
+                        </span>
+                      </div>
                     )}
                     <span className="font-medium">{selectedMatch.home_team.name}</span>
                   </div>
                   <span className="text-sm text-muted-foreground">vs</span>
                   <div className="flex items-center">
-                    {selectedMatch.away_team.logo_url && (
-                      <img src={selectedMatch.away_team.logo_url} alt="" className="h-6 w-6 mr-2" />
+                    {selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url ? (
+                      <img 
+                        src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url} 
+                        alt="" 
+                        className="h-6 w-6 mr-2 rounded-full object-cover" 
+                      />
+                    ) : (
+                      <div className="h-6 w-6 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">
+                          {selectedMatch.away_team.name?.slice(0, 1).toUpperCase()}
+                        </span>
+                      </div>
                     )}
                     <span className="font-medium">{selectedMatch.away_team.name}</span>
                   </div>

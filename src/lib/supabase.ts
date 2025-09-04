@@ -221,6 +221,41 @@ export type Database = {
           away_score?: number | null
         }
       }
+      sports_teams: {
+        Row: {
+          id: string
+          sport_id: string
+          name: string
+          logo_url: string | null
+          cloudinary_logo_url: string | null
+          country: string | null
+          created_at: string
+          updated_at: string
+          name_unaccented: string | null
+        }
+        Insert: {
+          id?: string
+          sport_id: string
+          name: string
+          logo_url?: string | null
+          cloudinary_logo_url?: string | null
+          country?: string | null
+          created_at?: string
+          updated_at?: string
+          name_unaccented?: string | null
+        }
+        Update: {
+          id?: string
+          sport_id?: string
+          name?: string
+          logo_url?: string | null
+          cloudinary_logo_url?: string | null
+          country?: string | null
+          created_at?: string
+          updated_at?: string
+          name_unaccented?: string | null
+        }
+      }
       friendships: {
         Row: {
           id: string

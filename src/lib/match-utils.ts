@@ -14,10 +14,12 @@ export interface UpcomingMatch {
   home_team: {
     name: string
     logo_url: string | null
+    cloudinary_logo_url?: string | null
   }
   away_team: {
     name: string
     logo_url: string | null
+    cloudinary_logo_url?: string | null
   }
 }
 
@@ -42,11 +44,13 @@ export async function fetchUpcomingMatches(limit: number = 10): Promise<Upcoming
         away_score,
         home_team:sports_teams!matches_home_team_id_fkey (
           name,
-          logo_url
+          logo_url,
+          cloudinary_logo_url
         ),
         away_team:sports_teams!matches_away_team_id_fkey (
           name,
-          logo_url
+          logo_url,
+          cloudinary_logo_url
         )
       `)
       .in('status', ['scheduled', 'in_progress', 'live'])
@@ -107,11 +111,13 @@ export async function fetchLiveAndSoonMatches(): Promise<UpcomingMatch[]> {
         away_score,
         home_team:sports_teams!matches_home_team_id_fkey (
           name,
-          logo_url
+          logo_url,
+          cloudinary_logo_url
         ),
         away_team:sports_teams!matches_away_team_id_fkey (
           name,
-          logo_url
+          logo_url,
+          cloudinary_logo_url
         )
       `)
       .or(`status.in.(in_progress,live),and(status.eq.scheduled,start_time.lte.${oneHourFromNow.toISOString()})`)
@@ -159,11 +165,13 @@ export async function fetchMatchesWithActiveBets(): Promise<UpcomingMatch[]> {
         away_score,
         home_team:sports_teams!matches_home_team_id_fkey (
           name,
-          logo_url
+          logo_url,
+          cloudinary_logo_url
         ),
         away_team:sports_teams!matches_away_team_id_fkey (
           name,
-          logo_url
+          logo_url,
+          cloudinary_logo_url
         ),
         bets!inner (
           id,

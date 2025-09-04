@@ -16,12 +16,14 @@ export interface Match {
     id: string
     name: string
     logo_url?: string
+    cloudinary_logo_url?: string
     country?: string
   }
   away_team: {
     id: string
     name: string
     logo_url?: string
+    cloudinary_logo_url?: string
     country?: string
   }
   sport: {
@@ -41,6 +43,7 @@ export interface Team {
   sport_id: string
   name: string
   logo_url?: string
+  cloudinary_logo_url?: string
   country?: string
 }
 
@@ -137,8 +140,8 @@ export class ChallengeService {
       .from('matches')
       .select(`
         *,
-        home_team:sports_teams!matches_home_team_id_fkey(*),
-        away_team:sports_teams!matches_away_team_id_fkey(*),
+        home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
+        away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
         sport:sports(*)
       `)
       .eq('status', 'scheduled')
@@ -381,8 +384,8 @@ export class ChallengeService {
         .select(`
           *,
           match:matches(*,
-            home_team:sports_teams!matches_home_team_id_fkey(*),
-            away_team:sports_teams!matches_away_team_id_fkey(*),
+            home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
+            away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
             sport:sports(*)
           ),
           creator:users!bets_creator_id_fkey(id, username, avatar_url),
@@ -417,8 +420,8 @@ export class ChallengeService {
         .select(`
           *,
           match:matches(*,
-            home_team:sports_teams!matches_home_team_id_fkey(*),
-            away_team:sports_teams!matches_away_team_id_fkey(*),
+            home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
+            away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
             sport:sports(*)
           ),
           creator:users!bets_creator_id_fkey(id, username, avatar_url),
@@ -456,8 +459,8 @@ export class ChallengeService {
         .select(`
           *,
           match:matches(*,
-            home_team:sports_teams!matches_home_team_id_fkey(*),
-            away_team:sports_teams!matches_away_team_id_fkey(*),
+            home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
+            away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
             sport:sports(*)
           ),
           creator:users!bets_creator_id_fkey(id, username, avatar_url),

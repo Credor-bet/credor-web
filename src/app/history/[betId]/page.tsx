@@ -307,13 +307,13 @@ export default function BetDetailsPage() {
                 <div className="flex items-center justify-between">
                   {/* Home Team */}
                   <div className="flex items-center space-x-4 flex-1">
-                    {bet.matches?.home_team?.cloudinary_logo_url || bet.matches?.home_team?.logo_url ? (
-                      <img 
-                        src={bet.matches.home_team.cloudinary_logo_url || bet.matches.home_team.logo_url} 
-                        alt={`${bet.matches.home_team.name} logo`}
-                        className="w-16 h-16 rounded-full object-cover shadow-lg"
-                      />
-                    ) : (
+                                         {bet.matches?.home_team?.cloudinary_logo_url || bet.matches?.home_team?.logo_url ? (
+                       <img 
+                         src={bet.matches.home_team.cloudinary_logo_url || bet.matches.home_team.logo_url || ''} 
+                         alt={`${bet.matches.home_team.name} logo`}
+                         className="w-16 h-16 rounded-full object-cover shadow-lg"
+                       />
+                     ) : (
                       <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-lg">
                         <span className="text-white text-sm font-bold">
                           {bet.matches?.home_team?.name?.slice(0, 3).toUpperCase() || 'HT'}
@@ -356,13 +356,13 @@ export default function BetDetailsPage() {
                         </p>
                       )}
                     </div>
-                    {bet.matches?.away_team?.cloudinary_logo_url || bet.matches?.away_team?.logo_url ? (
-                      <img 
-                        src={bet.matches.away_team.cloudinary_logo_url || bet.matches.away_team.logo_url} 
-                        alt={`${bet.matches.away_team.name} logo`}
-                        className="w-16 h-16 rounded-full object-cover shadow-lg"
-                      />
-                    ) : (
+                                         {bet.matches?.away_team?.cloudinary_logo_url || bet.matches?.away_team?.logo_url ? (
+                       <img 
+                         src={bet.matches.away_team.cloudinary_logo_url || bet.matches.away_team.logo_url || ''} 
+                         alt={`${bet.matches.away_team.name} logo`}
+                         className="w-16 h-16 rounded-full object-cover shadow-lg"
+                       />
+                     ) : (
                       <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
                         <span className="text-white text-sm font-bold">
                           {bet.matches?.away_team?.name?.slice(0, 3).toUpperCase() || 'AT'}

@@ -359,13 +359,13 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                 }}
               >
                 <div className="flex items-center">
-                                  {team.cloudinary_logo_url || team.logo_url ? (
-                  <img 
-                    src={team.cloudinary_logo_url || team.logo_url} 
-                    alt="" 
-                    className="h-6 w-6 mr-2 rounded-full object-cover" 
-                  />
-                ) : (
+                                                   {team.cloudinary_logo_url || team.logo_url ? (
+                   <img
+                     src={team.cloudinary_logo_url || team.logo_url || ''}
+                     alt=""
+                     className="h-6 w-6 mr-2 rounded-full object-cover"
+                   />
+                 ) : (
                   <div className="h-6 w-6 mr-2 bg-gradient-to-br from-gray-500 to-gray-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">
                       {team.name?.slice(0, 1).toUpperCase()}
@@ -393,7 +393,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
               <div className="flex items-center">
                 {selectedHomeTeam.cloudinary_logo_url || selectedHomeTeam.logo_url ? (
                   <img 
-                    src={selectedHomeTeam.cloudinary_logo_url || selectedHomeTeam.logo_url} 
+                    src={selectedHomeTeam.cloudinary_logo_url || selectedHomeTeam.logo_url || ''} 
                     alt="" 
                     className="h-6 w-6 mr-2 rounded-full object-cover" 
                   />
@@ -422,7 +422,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
               <div className="flex items-center">
                 {selectedAwayTeam.cloudinary_logo_url || selectedAwayTeam.logo_url ? (
                   <img 
-                    src={selectedAwayTeam.cloudinary_logo_url || selectedAwayTeam.logo_url} 
+                    src={selectedAwayTeam.cloudinary_logo_url || selectedAwayTeam.logo_url || ''} 
                     alt="" 
                     className="h-6 w-6 mr-2 rounded-full object-cover" 
                   />
@@ -469,7 +469,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                     <div className="flex items-center">
                                       {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
                   <img 
-                    src={match.home_team.cloudinary_logo_url || match.home_team.logo_url} 
+                    src={match.home_team.cloudinary_logo_url || match.home_team.logo_url || ''} 
                     alt="" 
                     className="h-6 w-6 mr-2 rounded-full object-cover" 
                   />
@@ -486,7 +486,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
               <div className="flex items-center">
                 {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
                   <img 
-                    src={match.away_team.cloudinary_logo_url || match.away_team.logo_url} 
+                    src={match.away_team.cloudinary_logo_url || match.away_team.logo_url || ''} 
                     alt="" 
                     className="h-6 w-6 mr-2 rounded-full object-cover" 
                   />
@@ -532,7 +532,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                 <div className="flex items-center">
                   {selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url ? (
                     <img 
-                      src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url} 
+                      src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url || ''} 
                       alt="" 
                       className="h-8 w-8 mr-2 rounded-full object-cover" 
                     />
@@ -549,7 +549,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                 <div className="flex items-center">
                   {selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url ? (
                     <img 
-                      src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url} 
+                      src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url || ''} 
                       alt="" 
                       className="h-8 w-8 mr-2 rounded-full object-cover" 
                     />
@@ -735,7 +735,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                   <div className="flex items-center">
                     {selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url ? (
                       <img 
-                        src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url} 
+                        src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url || ''} 
                         alt="" 
                         className="h-6 w-6 mr-2 rounded-full object-cover" 
                       />
@@ -752,7 +752,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                   <div className="flex items-center">
                     {selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url ? (
                       <img 
-                        src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url} 
+                        src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url || ''} 
                         alt="" 
                         className="h-6 w-6 mr-2 rounded-full object-cover" 
                       />

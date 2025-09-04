@@ -48,6 +48,25 @@ interface Bet {
     logo_url: string | null
     cloudinary_logo_url?: string | null
   }
+  matches?: {
+    home_team_id: string
+    away_team_id: string
+    start_time: string
+    status: string
+    match_result: string | null
+    home_score: number | null
+    away_score: number | null
+    home_team?: {
+      name: string
+      logo_url: string | null
+      cloudinary_logo_url?: string | null
+    }
+    away_team?: {
+      name: string
+      logo_url: string | null
+      cloudinary_logo_url?: string | null
+    }
+  }
   creator?: {
     username: string
     avatar_url: string | null

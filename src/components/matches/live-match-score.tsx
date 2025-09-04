@@ -146,13 +146,13 @@ export function LiveMatchScore({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="flex items-center">
-                {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
-                  <img 
-                    src={match.home_team.cloudinary_logo_url || match.home_team.logo_url} 
-                    alt="" 
-                    className="h-5 w-5 mr-1 rounded-full object-cover" 
-                  />
-                ) : (
+                                 {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
+                   <img 
+                     src={match.home_team.cloudinary_logo_url || match.home_team.logo_url || ''} 
+                     alt="" 
+                     className="h-5 w-5 mr-1 rounded-full object-cover" 
+                   />
+                 ) : (
                   <div className="h-5 w-5 mr-1 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">
                       {match.home_team.name?.slice(0, 1).toUpperCase()}
@@ -174,14 +174,14 @@ export function LiveMatchScore({
                 <span className="text-lg">{currentAwayScore}</span>
               </div>
               
-              <div className="flex items-center">
-                {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
-                  <img 
-                    src={match.away_team.cloudinary_logo_url || match.away_team.logo_url} 
-                    alt="" 
-                    className="h-5 w-5 mr-1 rounded-full object-cover" 
-                  />
-                ) : (
+                             <div className="flex items-center">
+                 {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
+                   <img 
+                     src={match.away_team.cloudinary_logo_url || match.away_team.logo_url || ''} 
+                     alt="" 
+                     className="h-5 w-5 mr-1 rounded-full object-cover" 
+                   />
+                 ) : (
                   <div className="h-5 w-5 mr-1 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">
                       {match.away_team.name?.slice(0, 1).toUpperCase()}
@@ -224,14 +224,14 @@ export function LiveMatchScore({
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center">
-              {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
-                <img 
-                  src={match.home_team.cloudinary_logo_url || match.home_team.logo_url} 
-                  alt="" 
-                  className="h-8 w-8 mr-2 rounded-full object-cover" 
-                />
-              ) : (
+                         <div className="flex items-center">
+               {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
+                 <img 
+                   src={match.home_team.cloudinary_logo_url || match.home_team.logo_url || ''} 
+                   alt="" 
+                   className="h-8 w-8 mr-2 rounded-full object-cover" 
+                 />
+               ) : (
                 <div className="h-8 w-8 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-bold">
                     {match.home_team.name?.slice(0, 1).toUpperCase()}
@@ -263,14 +263,14 @@ export function LiveMatchScore({
               </Badge>
             </div>
             
-            <div className="flex items-center">
-              {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
-                <img 
-                  src={match.away_team.cloudinary_logo_url || match.away_team.logo_url} 
-                  alt="" 
-                  className="h-8 w-8 mr-2 rounded-full object-cover" 
-                />
-              ) : (
+                         <div className="flex items-center">
+               {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
+                 <img 
+                   src={match.away_team.cloudinary_logo_url || match.away_team.logo_url || ''} 
+                   alt="" 
+                   className="h-8 w-8 mr-2 rounded-full object-cover" 
+                 />
+               ) : (
                 <div className="h-8 w-8 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-bold">
                     {match.away_team.name?.slice(0, 1).toUpperCase()}

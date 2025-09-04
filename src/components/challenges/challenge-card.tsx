@@ -770,13 +770,13 @@ function AcceptChallengeForm({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="flex items-center">
-                {challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url ? (
-                  <img 
-                    src={challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url} 
-                    alt="" 
-                    className="h-5 w-5 mr-1 rounded-full object-cover" 
-                  />
-                ) : (
+                                 {challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url ? (
+                   <img
+                     src={challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url || ''}
+                     alt=""
+                     className="h-5 w-5 mr-1 rounded-full object-cover"
+                   />
+                 ) : (
                   <div className="h-5 w-5 mr-1 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">
                       {challenge.match.home_team.name?.slice(0, 1).toUpperCase()}
@@ -787,13 +787,13 @@ function AcceptChallengeForm({
               </div>
               <span className="text-xs text-muted-foreground">vs</span>
               <div className="flex items-center">
-                {challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url ? (
-                  <img 
-                    src={challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url} 
-                    alt="" 
-                    className="h-5 w-5 mr-1 rounded-full object-cover" 
-                  />
-                ) : (
+                                 {challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url ? (
+                   <img
+                     src={challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url || ''}
+                     alt=""
+                     className="h-5 w-5 mr-1 rounded-full object-cover"
+                   />
+                 ) : (
                   <div className="h-5 w-5 mr-1 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">
                       {challenge.match.away_team.name?.slice(0, 1).toUpperCase()}
@@ -976,7 +976,7 @@ function RejectChallengeForm({ challenge, onReject, isLoading }: RejectChallenge
                 <div className="flex items-center">
                   {challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url ? (
                     <img 
-                      src={challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url} 
+                      src={challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url || ''} 
                       alt="" 
                       className="h-6 w-6 mr-2 rounded-full object-cover" 
                     />
@@ -993,7 +993,7 @@ function RejectChallengeForm({ challenge, onReject, isLoading }: RejectChallenge
                 <div className="flex items-center">
                   {challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url ? (
                     <img 
-                      src={challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url} 
+                      src={challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url || ''} 
                       alt="" 
                       className="h-6 w-6 mr-2 rounded-full object-cover" 
                     />
@@ -1070,7 +1070,7 @@ function CancelChallengeForm({ challenge, onCancel, isLoading }: CancelChallenge
                 <div className="flex items-center">
                   {challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url ? (
                     <img 
-                      src={challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url} 
+                      src={challenge.match.home_team.cloudinary_logo_url || challenge.match.home_team.logo_url || ''} 
                       alt="" 
                       className="h-6 w-6 mr-2 rounded-full object-cover" 
                     />
@@ -1087,7 +1087,7 @@ function CancelChallengeForm({ challenge, onCancel, isLoading }: CancelChallenge
                 <div className="flex items-center">
                   {challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url ? (
                     <img 
-                      src={challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url} 
+                      src={challenge.match.away_team.cloudinary_logo_url || challenge.match.away_team.logo_url || ''} 
                       alt="" 
                       className="h-6 w-6 mr-2 rounded-full object-cover" 
                     />

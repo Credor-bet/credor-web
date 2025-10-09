@@ -386,6 +386,12 @@ interface Transaction {
   created_at: string
   currency: string
   provider: string
+  // Crypto-specific fields
+  tx_hash?: string
+  to_address?: string
+  from_address?: string
+  network?: string
+  is_crypto?: boolean
 }
 
 interface RecentActivity {

@@ -25,8 +25,8 @@ export default function ConfirmEmailPage() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // First, check if email is provided in URL params
-        const emailParam = searchParams.get('email')
+        // First, check if email is provided in URL params (defensively handle nullable searchParams)
+        const emailParam = searchParams?.get('email') || undefined
         console.log('Confirm-email: Email param from URL:', emailParam)
         
         if (emailParam) {
@@ -84,8 +84,8 @@ export default function ConfirmEmailPage() {
         return
       }
 
-      const emailParam = searchParams.get('email')
-      const emailToUse = emailParam || (await supabase.auth.getSession()).data.session?.user?.email
+      const emailFromParams = searchParams?.get('email') || undefined
+      const emailToUse = emailFromParams || (await supabase.auth.getSession()).data.session?.user?.email
       
       console.log('Confirm-email: Auto-send email to use:', emailToUse)
       

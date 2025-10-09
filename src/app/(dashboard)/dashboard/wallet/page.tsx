@@ -18,9 +18,14 @@ import {
   Globe,
   Clock,
   Coins,
-  ChevronRight
+  ChevronRight,
+  Zap
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { CryptoDepositModal } from '@/components/crypto/crypto-deposit-modal'
+import { CryptoWithdrawalModal } from '@/components/crypto/crypto-withdrawal-modal'
+import { CryptoManagementModal } from '@/components/crypto/crypto-management-modal'
+import { PaymentMethodSelectionModal } from '@/components/crypto/payment-method-selection-modal'
 
 interface Transaction {
   id: string
@@ -38,35 +43,33 @@ interface Transaction {
 interface PaymentProcessor {
   id: string
   name: string
-  type: 'digital'
+  type: 'digital' | 'crypto'
   icon: React.ReactNode
   description: string
   regions: string[]
   comingSoon?: boolean
+  available?: boolean
 }
 
 const paymentProcessors: PaymentProcessor[] = [
   {
-    id: 'paystack',
-    name: 'Paystack',
-    type: 'digital',
-    icon: <CreditCard className="h-6 w-6" />,
-    description: 'Modern online and offline payments for Africa',
-    regions: ['NG', 'GH', 'ZA', 'KE']
-  },
-  {
-    id: 'flutterwave',
-    name: 'Flutterwave',
-    type: 'digital',
-    icon: <Globe className="h-6 w-6" />,
-    description: 'Payment infrastructure for global merchants',
-    regions: ['NG', 'GH', 'KE', 'UG', 'ZA', 'RW']
+    id: 'crypto',
+    name: 'USDC (Crypto)',
+    type: 'crypto',
+    icon: <Zap className="h-6 w-6" />,
+    description: 'Direct USDC deposits via Polygon network',
+    regions: ['Global'],
+    available: true
   }
 ]
 
 export default function WalletPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isCryptoDepositOpen, setIsCryptoDepositOpen] = useState(false)
+  const [isCryptoWithdrawalOpen, setIsCryptoWithdrawalOpen] = useState(false)
+  const [isCryptoManagementOpen, setIsCryptoManagementOpen] = useState(false)
+  const [isPaymentMethodSelectionOpen, setIsPaymentMethodSelectionOpen] = useState(false)
   const { user, wallet, refreshWallet } = useAuthStore()
   const router = useRouter()
 
@@ -137,6 +140,26 @@ export default function WalletPage() {
 
   const availableProcessors = paymentProcessors
 
+  const handlePaymentMethodClick = (processor: PaymentProcessor) => {
+    if (processor.id === 'crypto' && processor.available) {
+      setIsCryptoManagementOpen(true)
+    }
+  }
+
+  const handleWithdrawalClick = () => {
+    setIsCryptoWithdrawalOpen(true)
+  }
+
+  const handleAddMoneyClick = () => {
+    setIsPaymentMethodSelectionOpen(true)
+  }
+
+  const handlePaymentMethodSelected = (processor: PaymentProcessor) => {
+    if (processor.id === 'crypto') {
+      setIsCryptoManagementOpen(true)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="md:ml-64 p-4 md:p-6 flex items-center justify-center min-h-screen">
@@ -154,11 +177,11 @@ export default function WalletPage() {
           <p className="text-gray-600 mt-1">Manage your balance and payment methods</p>
         </div>
         <div className="flex space-x-3">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleWithdrawalClick}>
             <Minus className="h-4 w-4 mr-2" />
             Withdraw
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={handleAddMoneyClick}>
             <Plus className="h-4 w-4 mr-2" />
             Add Money
           </Button>
@@ -192,7 +215,7 @@ export default function WalletPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Transaction History */}
         <Card>
           <CardHeader>
@@ -269,7 +292,7 @@ export default function WalletPage() {
               <span>Payment Methods</span>
             </CardTitle>
             <CardDescription>
-              African payment solutions for deposits and withdrawals
+              Choose your preferred payment method for deposits and withdrawals
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -277,42 +300,86 @@ export default function WalletPage() {
               {availableProcessors.map((processor) => (
                 <div 
                   key={processor.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors cursor-not-allowed opacity-75"
+                  className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                    processor.available 
+                      ? 'border-gray-200 hover:border-gray-300 cursor-pointer hover:bg-gray-50' 
+                      : 'border-gray-200 cursor-not-allowed opacity-75'
+                  }`}
+                  onClick={() => handlePaymentMethodClick(processor)}
                 >
                   <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gray-100 rounded-lg">
+                    <div className={`p-2 rounded-lg ${
+                      processor.type === 'crypto' 
+                        ? 'bg-blue-100' 
+                        : 'bg-gray-100'
+                    }`}>
                       {processor.icon}
                     </div>
                     <div>
                       <div className="font-medium flex items-center space-x-2">
                         <span>{processor.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          Coming Soon
-                        </Badge>
+                        {processor.available ? (
+                          <Badge className="bg-green-100 text-green-800 text-xs">
+                            Available
+                          </Badge>
+                        ) : processor.comingSoon ? (
+                          <Badge variant="outline" className="text-xs">
+                            Coming Soon
+                          </Badge>
+                        ) : null}
                       </div>
                       <div className="text-sm text-gray-500">
                         {processor.description}
                       </div>
                     </div>
                   </div>
-                  <ArrowUpRight className="h-4 w-4 text-gray-400" />
+                  <ChevronRight className={`h-4 w-4 ${
+                    processor.available ? 'text-gray-600' : 'text-gray-400'
+                  }`} />
                 </div>
               ))}
-            </div>
-            
-            <Separator className="my-4" />
-            
-            <div className="text-center py-4">
-              <div className="text-sm text-gray-500 mb-2">
-                Payment processing integration coming soon
-              </div>
-              <Badge variant="outline" className="text-xs">
-                Beta Version
-              </Badge>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Modals */}
+      <PaymentMethodSelectionModal 
+        isOpen={isPaymentMethodSelectionOpen}
+        onClose={() => setIsPaymentMethodSelectionOpen(false)}
+        onPaymentMethodSelected={handlePaymentMethodSelected}
+      />
+      
+      <CryptoManagementModal 
+        isOpen={isCryptoManagementOpen}
+        onClose={() => setIsCryptoManagementOpen(false)}
+        onDepositInitiated={() => {
+          // Refresh wallet balance after deposit
+          refreshWallet()
+        }}
+        onWithdrawalCreated={() => {
+          // Refresh wallet balance after withdrawal
+          refreshWallet()
+        }}
+      />
+      
+      <CryptoDepositModal 
+        isOpen={isCryptoDepositOpen}
+        onClose={() => setIsCryptoDepositOpen(false)}
+        onDepositInitiated={() => {
+          // Refresh wallet balance after deposit
+          refreshWallet()
+        }}
+      />
+      
+      <CryptoWithdrawalModal 
+        isOpen={isCryptoWithdrawalOpen}
+        onClose={() => setIsCryptoWithdrawalOpen(false)}
+        onWithdrawalCreated={() => {
+          // Refresh wallet balance after withdrawal
+          refreshWallet()
+        }}
+      />
     </div>
   )
 }

@@ -14,6 +14,42 @@ export interface DepositSource {
   user_id: string
   from_address: string
   created_at: string
+  verified?: boolean
+  verification_method?: string | null
+  verified_at?: string | null
+  verification_challenge?: string | null
+  challenge_expires_at?: string | null
+}
+
+export interface VerificationChallengeRequest {
+  user_id: string
+  address: string
+}
+
+export interface VerificationChallengeResponse {
+  source_id: string
+  challenge_message: string
+  expires_at: string
+}
+
+export interface VerificationConfirmRequest {
+  source_id: string
+  signed_message: string
+}
+
+export interface VerificationConfirmResponse {
+  verified: boolean
+  message: string
+  deposit_source: DepositSource
+}
+
+export interface VerificationStatusResponse {
+  source_id: string
+  verified: boolean
+  verification_method: string | null
+  verified_at: string | null
+  challenge_pending: boolean
+  challenge_expires_at: string | null
 }
 
 export interface WithdrawalRequest {
@@ -236,6 +272,25 @@ class CryptoService {
 
   async getUserDepositHistory(userId: string): Promise<DepositHistory[]> {
     return this.makeRequest<DepositHistory[]>(`/api/v1/deposits/${userId}`)
+  }
+
+  // Address verification endpoints
+  async requestVerificationChallenge(request: VerificationChallengeRequest): Promise<VerificationChallengeResponse> {
+    return this.makeRequest<VerificationChallengeResponse>('/api/v1/deposit-sources/request-verification', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    })
+  }
+
+  async confirmVerification(request: VerificationConfirmRequest): Promise<VerificationConfirmResponse> {
+    return this.makeRequest<VerificationConfirmResponse>('/api/v1/deposit-sources/confirm-verification', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    })
+  }
+
+  async getVerificationStatus(sourceId: string): Promise<VerificationStatusResponse> {
+    return this.makeRequest<VerificationStatusResponse>(`/api/v1/deposit-sources/${sourceId}/status`)
   }
 
   // Utility methods

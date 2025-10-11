@@ -13,13 +13,17 @@ const nextConfig: NextConfig = {
   // Optimize for production
   compress: true,
   poweredByHeader: false,
-  reactStrictMode: true,
+  reactStrictMode: false, // Disable strict mode to avoid double rendering issues
   eslint: {
     // Warning: This allows production builds to successfully complete even if
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
-  // Force App Router
+  typescript: {
+    // Allow production builds with type errors
+    ignoreBuildErrors: false,
+  },
+  // Use standalone output
   output: 'standalone',
 }
 

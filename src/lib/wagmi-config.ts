@@ -7,7 +7,7 @@ import { walletConnect, injected } from 'wagmi/connectors'
 import { QueryClient } from '@tanstack/react-query'
 
 // Get WalletConnect project ID from environment
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || ''
+const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-project-id'
 
 // Determine network based on environment
 const isTestnet = process.env.NEXT_PUBLIC_IS_TESTNET === 'true'
@@ -23,24 +23,22 @@ export const config = createConfig({
   connectors: [
     // Injected wallets (MetaMask, Coinbase, Brave, etc.)
     injected({ shimDisconnect: true }),
-    // WalletConnect for mobile and QR code scanning
-    walletConnect({ projectId })
+    // WalletConnect for mobile and QR code scanning (only if projectId is valid)
+    ...(projectId && projectId !== 'demo-project-id' ? [walletConnect({ projectId })] : [])
   ],
   ssr: true
 })
 
 // Create Web3Modal instance
-if (projectId && typeof window !== 'undefined') {
-  createWeb3Modal({
-    wagmiConfig: config,
-    projectId,
-    enableAnalytics: false,
-    themeMode: 'light',
-    themeVariables: {
-      '--w3m-accent': '#3b82f6'
-    }
-  })
-}
+export const web3Modal = createWeb3Modal({
+  wagmiConfig: config,
+  projectId: projectId || 'demo-project-id', // Fallback for development
+  enableAnalytics: false,
+  themeMode: 'light',
+  themeVariables: {
+    '--w3m-accent': '#3b82f6'
+  }
+})
 
 // React Query client for Wagmi
 export const queryClient = new QueryClient({

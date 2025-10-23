@@ -20,8 +20,18 @@ export function PendingDepositsNotification({ onDepositComplete }: PendingDeposi
       setPendingDeposits(deposits)
       setError('')
     } catch (err) {
-      setError('Failed to check pending deposits')
-      console.error('Error fetching pending deposits:', err)
+      // Don't show error for 500/404 responses - just silently fail
+      if (err instanceof Error && (
+        err.message.includes('500') || 
+        err.message.includes('404') ||
+        err.message.includes('Server returned HTML')
+      )) {
+        console.log('Pending deposits endpoint not available:', err.message)
+        setPendingDeposits([])
+      } else {
+        setError('Failed to check pending deposits')
+        console.error('Error fetching pending deposits:', err)
+      }
     } finally {
       setLoading(false)
     }

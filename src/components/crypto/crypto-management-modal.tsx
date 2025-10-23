@@ -21,6 +21,8 @@ import { CryptoDepositModal } from './crypto-deposit-modal'
 import { CryptoWithdrawalModal } from './crypto-withdrawal-modal'
 import { DepositVerification } from './deposit-verification'
 import { DepositSourceManager } from './deposit-source-manager'
+import { PendingDepositsNotification } from './pending-deposits-notification'
+import { ManualDepositVerification } from './manual-deposit-verification'
 
 interface CryptoManagementModalProps {
   isOpen: boolean
@@ -68,6 +70,9 @@ export function CryptoManagementModal({
           </DialogHeader>
 
           <div className="space-y-6">
+            {/* Pending Deposits Notification */}
+            <PendingDepositsNotification />
+
             {/* Status Badge */}
             <div className="flex items-center justify-center">
               <Badge className="bg-green-100 text-green-800">
@@ -134,7 +139,22 @@ export function CryptoManagementModal({
                       <span>Verify Deposit</span>
                     </CardTitle>
                     <CardDescription>
-                      Verify a deposit using transaction hash for dispute resolution
+                      Verify a deposit using transaction hash if it wasn't automatically detected
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ManualDepositVerification />
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Search className="h-5 w-5" />
+                      <span>Dispute Resolution</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Advanced verification for dispute resolution
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

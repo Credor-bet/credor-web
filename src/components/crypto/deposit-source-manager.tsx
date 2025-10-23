@@ -21,13 +21,9 @@ import {
   Clock
 } from 'lucide-react'
 import { toast } from 'sonner'
-
-// Declare ethereum type for MetaMask
-declare global {
-  interface Window {
-    ethereum?: any
-  }
-}
+import { useAccount, useSignMessage } from 'wagmi'
+import { useWeb3Modal } from '@web3modal/wagmi/react'
+import { WalletConnectButton } from './wallet-connect-button'
 
 interface DepositSourceManagerProps {
   onSourceAdded?: (source: DepositSource) => void
@@ -43,8 +39,13 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   const [isVerifying, setIsVerifying] = useState(false)
   const [challengeMessage, setChallengeMessage] = useState<string | null>(null)
-  const [pendingSourceId, setPendingSourceId] = useState<string | null>(null)
+  const [pendingChallengeId, setPendingChallengeId] = useState<string | null>(null)
   const { user } = useAuthStore()
+  
+  // Wagmi hooks for wallet connection and signing
+  const { address: connectedAddress, isConnected } = useAccount()
+  const { signMessageAsync } = useSignMessage()
+  const { open } = useWeb3Modal()
 
   useEffect(() => {
     if (user?.id) {
@@ -85,9 +86,19 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
       return
     }
 
-    // Check if MetaMask is installed
-    if (!window.ethereum) {
-      toast.error('Please install MetaMask to verify your address')
+    // Check if wallet is connected
+    if (!isConnected) {
+      toast.error('Please connect your wallet first')
+      open()
+      return
+    }
+
+    // Verify that the connected wallet matches the address to verify
+    const normalizedInput = newAddress.toLowerCase()
+    const normalizedConnected = connectedAddress?.toLowerCase()
+    
+    if (normalizedInput !== normalizedConnected) {
+      toast.error(`Please connect the wallet ${newAddress.slice(0, 6)}...${newAddress.slice(-4)} to verify ownership`)
       return
     }
 
@@ -97,24 +108,23 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
       // Step 1: Request verification challenge
       const challenge = await cryptoService.requestVerificationChallenge({
         user_id: user.id,
-        address: newAddress.toLowerCase()
+        address: normalizedInput
       })
       
       setChallengeMessage(challenge.challenge_message)
-      setPendingSourceId(challenge.source_id)
+      setPendingChallengeId(challenge.challenge_id)
       
-      // Step 2: Request signature from MetaMask
+      // Step 2: Request signature from connected wallet
       setIsVerifying(true)
       toast.info('Please sign the message in your wallet to verify ownership')
       
-      const signature = await window.ethereum.request({
-        method: 'personal_sign',
-        params: [challenge.challenge_message, newAddress.toLowerCase()]
+      const signature = await signMessageAsync({
+        message: challenge.challenge_message
       })
       
       // Step 3: Submit signature for verification
       const result = await cryptoService.confirmVerification({
-        source_id: challenge.source_id,
+        challenge_id: challenge.challenge_id,
         signed_message: signature
       })
       
@@ -122,7 +132,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
         setSources(prev => [...prev, result.deposit_source])
         setNewAddress('')
         setChallengeMessage(null)
-        setPendingSourceId(null)
+        setPendingChallengeId(null)
         setIsDialogOpen(false)
         toast.success('Address verified and added successfully!')
         onSourceAdded?.(result.deposit_source)
@@ -141,6 +151,10 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
         toast.error('You can only verify up to 3 addresses. Remove an existing address to add a new one.')
       } else if (errorMessage.includes('system wallet')) {
         toast.error('This address cannot be used (system wallet)')
+      } else if (errorMessage.includes('Address was just verified by another user')) {
+        toast.error('This address was just verified by someone else. You can only verify addresses you own.')
+      } else if (errorMessage.includes('already verified by another user')) {
+        toast.error('This address is already verified by another user')
       } else if (errorMessage.includes('HTML instead of JSON') || errorMessage.includes('404')) {
         toast.error('Deposit source management is not available yet. Please try again later.')
       } else {
@@ -231,17 +245,48 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                {/* Wallet Connection Section */}
+                <div className="space-y-2">
+                  <Label>Connect Wallet</Label>
+                  <WalletConnectButton 
+                    variant={isConnected ? "outline" : "default"}
+                    className="w-full"
+                  />
+                  {isConnected && connectedAddress && (
+                    <p className="text-sm text-green-600 flex items-center gap-1">
+                      <Check className="h-4 w-4" />
+                      Wallet connected
+                    </p>
+                  )}
+                  <p className="text-sm text-gray-500">
+                    Connect the wallet you want to verify
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="address">Ethereum Address</Label>
-                  <Input
-                    id="address"
-                    placeholder="0x..."
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    className="font-mono"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="address"
+                      placeholder="0x..."
+                      value={newAddress}
+                      onChange={(e) => setNewAddress(e.target.value)}
+                      className="font-mono flex-1"
+                    />
+                    {isConnected && connectedAddress && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setNewAddress(connectedAddress)}
+                        disabled={newAddress === connectedAddress}
+                      >
+                        Use Connected
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">
-                    Enter the address you'll be sending USDC from
+                    Enter the address you'll be sending USDC from (must match connected wallet)
                   </p>
                 </div>
                 
@@ -275,7 +320,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                       setIsDialogOpen(false)
                       setNewAddress('')
                       setChallengeMessage(null)
-                      setPendingSourceId(null)
+                      setPendingChallengeId(null)
                     }}
                     disabled={isAdding || isVerifying}
                   >

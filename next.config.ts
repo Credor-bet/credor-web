@@ -25,6 +25,25 @@ const nextConfig: NextConfig = {
   },
   // Use standalone output
   output: 'standalone',
+  webpack: (config, { isServer }) => {
+    // Handle missing dependencies for web3 packages
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      '@react-native-async-storage/async-storage': false,
+      'pino-pretty': false,
+    }
+    
+    // Ignore specific modules that cause warnings
+    config.externals = config.externals || []
+    if (!isServer) {
+      config.externals.push({
+        '@react-native-async-storage/async-storage': 'commonjs @react-native-async-storage/async-storage',
+        'pino-pretty': 'commonjs pino-pretty',
+      })
+    }
+    
+    return config
+  },
 }
 
 export default nextConfig

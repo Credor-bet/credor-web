@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 export interface PublicPoolInfo {
   address: string
   network: string
-  network_id: number
+  network_id?: number
   usdc_contract: string
   is_testnet: boolean
 }
@@ -229,7 +229,7 @@ class CryptoService {
 
   // Public endpoints (no auth required)
   async getPublicPoolInfo(): Promise<PublicPoolInfo> {
-    return this.makeRequest<PublicPoolInfo>('/api/v1/pool-info')
+    return this.makeRequest<PublicPoolInfo>('/api/v1/pool-wallet/info')
   }
 
   async estimateWithdrawalFee(toAddress: string, amount: number): Promise<WithdrawalEstimate> {

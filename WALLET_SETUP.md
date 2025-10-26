@@ -1,67 +1,37 @@
-# Universal Wallet Integration Setup
+# Wallet Setup Guide
 
-## 🔑 Required Environment Variables
+## Environment Variables
 
-Create a `.env.local` file in the `credor-web` directory with the following variables:
+Add these to your `.env.local` file:
 
-```env
-# Crypto API Configuration
-NEXT_PUBLIC_CRYPTO_API_URL=http://localhost:8000
+```bash
+# WalletConnect Project ID (Required for mobile wallet support)
+# Get your free project ID from: https://cloud.walletconnect.com
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
+
+# Crypto API Configuration (if not already set)
+NEXT_PUBLIC_CRYPTO_API_URL=https://your-api-domain.com
 NEXT_PUBLIC_NETWORK=polygon
 NEXT_PUBLIC_IS_TESTNET=true
-
-# WalletConnect Configuration
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
 ```
 
-## 📱 Get Your WalletConnect Project ID
-
-WalletConnect is **FREE** and required for mobile wallet support.
-
-### Steps:
+## Getting WalletConnect Project ID
 
 1. Go to https://cloud.walletconnect.com
-2. Sign up/Sign in (free account)
+2. Sign up for a free account
 3. Create a new project
-4. Copy your **Project ID**
-5. Paste it in `.env.local` as `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+4. Copy the Project ID
+5. Add it to your `.env.local` file
 
-## 🎯 What This Enables
+## Mobile Wallet Support
 
-With the Project ID configured, your users can:
+With this setup, users can now connect with:
+- **Desktop**: MetaMask, Coinbase Wallet, Brave Wallet, etc.
+- **Mobile**: MetaMask Mobile, Coinbase Wallet, Trust Wallet, Rainbow, etc.
+- **QR Codes**: Any WalletConnect-compatible wallet
 
-- **Desktop**: Use MetaMask, Coinbase Wallet, or any browser extension
-- **Mobile Web**: Tap to open their wallet app (MetaMask Mobile, Trust Wallet, Coinbase Wallet, etc.)
-- **Cross-Device**: Scan QR code from desktop with phone wallet
-- **300+ Wallets**: Automatic support for all major wallets
-
-## 🧪 Testing
-
-### Desktop
-1. Install MetaMask or Coinbase Wallet extension
-2. Click "Connect Wallet" in the app
-3. Select your wallet
-4. Approve connection
-
-### Mobile
-1. Open the app in mobile browser (Safari/Chrome)
-2. Click "Connect Wallet"
-3. Select your wallet (e.g., MetaMask Mobile)
-4. App will deep link to your wallet app
-5. Approve connection in wallet
-6. Return to browser
-
-### Cross-Device
-1. Open app on desktop
-2. Click "Connect Wallet" → "WalletConnect"
-3. Scan QR code with phone wallet app
-4. Approve connection on phone
-
-## 🚨 Important Notes
-
-- **No WalletConnect account?** The app will still work with browser extensions (desktop only)
-- **Project ID is public** - It's safe to commit to Git (it's a client-side identifier)
-- **Free tier limits** - WalletConnect free tier: unlimited connections
-- **Network configuration** - Make sure testnet/mainnet matches your backend
-
-
+The app will automatically:
+- Detect if user is on mobile and show appropriate wallet options
+- Handle deep linking to mobile wallet apps
+- Show QR codes for desktop-to-mobile connections
+- Support 300+ wallets through WalletConnect

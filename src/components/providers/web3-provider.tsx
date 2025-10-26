@@ -17,5 +17,3 @@ export function Web3Provider({ children }: Web3ProviderProps) {
     </WagmiProvider>
   )
 }
-
-

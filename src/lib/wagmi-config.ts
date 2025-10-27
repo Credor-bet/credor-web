@@ -31,7 +31,38 @@ export const web3Modal = createWeb3Modal({
   themeMode: 'light',
   themeVariables: {
     '--w3m-accent': '#3b82f6'
-  }
+  },
+  // Mobile-specific configurations
+  enableNetworkView: true,
+  enableAccountView: true,
+  enableExplorer: true,
+  // Better mobile deep linking
+  mobileWallets: [
+    {
+      id: 'metamask',
+      name: 'MetaMask',
+      links: {
+        native: 'metamask://',
+        universal: 'https://metamask.app.link'
+      }
+    },
+    {
+      id: 'coinbase',
+      name: 'Coinbase Wallet',
+      links: {
+        native: 'coinbasewallet://',
+        universal: 'https://go.cb-w.com'
+      }
+    },
+    {
+      id: 'trust',
+      name: 'Trust Wallet',
+      links: {
+        native: 'trust://',
+        universal: 'https://link.trustwallet.com'
+      }
+    }
+  ]
 })
 
 // Create query client for React Query

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { cryptoService, DepositSource } from '@/lib/crypto-service'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,36 @@ import { toast } from 'sonner'
 import { useAccount, useSignMessage } from 'wagmi'
 import { useWeb3Modal } from '@web3modal/wagmi/react'
 import { WalletConnectButton } from './wallet-connect-button'
+
+// Helper function to safely extract error message
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (typeof error === 'string') {
+    return error
+  }
+  if (error && typeof error === 'object') {
+    // Try to extract message from common error object structures
+    const obj = error as Record<string, unknown>
+    if (typeof obj.message === 'string') {
+      return obj.message
+    }
+    if (typeof obj.error === 'string') {
+      return obj.error
+    }
+    if (typeof obj.reason === 'string') {
+      return obj.reason
+    }
+    // Last resort: stringify the object safely
+    try {
+      return JSON.stringify(obj)
+    } catch {
+      return 'An unknown error occurred'
+    }
+  }
+  return 'An unknown error occurred'
+}
 
 interface DepositSourceManagerProps {
   onSourceAdded?: (source: DepositSource) => void
@@ -51,6 +81,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
     if (user?.id) {
       fetchDepositSources()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
   const fetchDepositSources = async () => {
@@ -77,7 +108,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
     }
   }
 
-  const handleAddSource = async () => {
+  const handleAddSource = useCallback(async () => {
     if (!user?.id || !newAddress.trim()) return
 
     // Validate Ethereum address
@@ -118,67 +149,90 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
       setIsVerifying(true)
       toast.info('Please sign the message in your wallet to verify ownership')
       
-      const signature = await signMessageAsync({
+      // Use a timeout to prevent hanging on slow wallets
+      let timeoutId: NodeJS.Timeout | null = null
+      const signaturePromise = signMessageAsync({
         message: challenge.challenge_message
       })
       
-      // Step 3: Submit signature for verification
-      const result = await cryptoService.confirmVerification({
-        challenge_id: challenge.challenge_id,
-        signed_message: signature
+      const timeoutPromise = new Promise<string>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Signature request timed out. Please try again.')), 60000)
       })
       
-      if (result.verified) {
-        setSources(prev => [...prev, result.deposit_source])
-        setNewAddress('')
-        setChallengeMessage(null)
-        setPendingChallengeId(null)
-        setIsDialogOpen(false)
-        toast.success('Address verified and added successfully!')
-        onSourceAdded?.(result.deposit_source)
-      } else {
-        toast.error('Address verification failed')
+      try {
+        const signature = await Promise.race([signaturePromise, timeoutPromise])
+        
+        // Clean up timeout if signature succeeds
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
+        
+        // Continue with verification...
+        const result = await cryptoService.confirmVerification({
+          challenge_id: challenge.challenge_id,
+          signed_message: signature
+        })
+        
+        if (result.verified) {
+          setSources(prev => [...prev, result.deposit_source])
+          setNewAddress('')
+          setChallengeMessage(null)
+          setPendingChallengeId(null)
+          setIsDialogOpen(false)
+          toast.success('Address verified and added successfully!')
+          onSourceAdded?.(result.deposit_source)
+        } else {
+          toast.error('Address verification failed')
+        }
+      } catch (signError) {
+        // Clean up timeout on error
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
+        throw signError
       }
     } catch (error) {
       console.error('Error adding deposit source:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to add deposit source'
+      const errorMessage = getErrorMessage(error)
+      const lowerErrorMessage = errorMessage.toLowerCase()
       
-      if (errorMessage.includes('User rejected') || errorMessage.includes('User denied')) {
+      if (lowerErrorMessage.includes('user rejected') || 
+          lowerErrorMessage.includes('user denied') || 
+          lowerErrorMessage.includes('user cancelled') ||
+          lowerErrorMessage.includes('rejected')) {
         toast.error('Signature request was cancelled')
-      } else if (errorMessage.includes('already mapped')) {
+      } else if (lowerErrorMessage.includes('already mapped')) {
         toast.error('This address is already linked to another account')
-      } else if (errorMessage.includes('Maximum of 3 verified addresses')) {
+      } else if (lowerErrorMessage.includes('maximum of 3 verified addresses') || 
+                 lowerErrorMessage.includes('max 3')) {
         toast.error('You can only verify up to 3 addresses. Remove an existing address to add a new one.')
-      } else if (errorMessage.includes('system wallet')) {
+      } else if (lowerErrorMessage.includes('system wallet')) {
         toast.error('This address cannot be used (system wallet)')
-      } else if (errorMessage.includes('Address was just verified by another user')) {
+      } else if (lowerErrorMessage.includes('address was just verified by another user') ||
+                 lowerErrorMessage.includes('recently verified')) {
         toast.error('This address was just verified by someone else. You can only verify addresses you own.')
-      } else if (errorMessage.includes('already verified by another user')) {
+      } else if (lowerErrorMessage.includes('already verified by another user')) {
         toast.error('This address is already verified by another user')
-      } else if (errorMessage.includes('HTML instead of JSON') || errorMessage.includes('404')) {
+      } else if (lowerErrorMessage.includes('html instead of json') || 
+                 lowerErrorMessage.includes('404') ||
+                 lowerErrorMessage.includes('not found')) {
         toast.error('Deposit source management is not available yet. Please try again later.')
+      } else if (lowerErrorMessage.includes('timed out') || 
+                 lowerErrorMessage.includes('timeout')) {
+        toast.error('Signature request took too long. Please try again.')
       } else {
-        toast.error(errorMessage)
+        // Show a generic error message for unknown errors to avoid showing [object Object]
+        toast.error('Failed to verify address. Please try again.')
+        console.error('Unknown error in handleAddSource:', error)
       }
     } finally {
       setIsAdding(false)
       setIsVerifying(false)
     }
-  }
+  }, [user?.id, newAddress, isConnected, connectedAddress, signMessageAsync, open, onSourceAdded])
 
-  const handleRemoveSource = async (sourceId: string) => {
-    try {
-      await cryptoService.deleteDepositSource(sourceId)
-      setSources(prev => prev.filter(source => source.id !== sourceId))
-      toast.success('Deposit source removed successfully')
-      onSourceRemoved?.(sourceId)
-    } catch (error) {
-      console.error('Error removing deposit source:', error)
-      toast.error('Failed to remove deposit source')
-    }
-  }
 
-  const copyToClipboard = async (address: string) => {
+  const copyToClipboard = useCallback(async (address: string) => {
     try {
       await navigator.clipboard.writeText(address)
       setCopiedAddress(address)
@@ -187,11 +241,29 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
     } catch (error) {
       toast.error('Failed to copy address')
     }
-  }
+  }, [])
 
-  const formatAddress = (address: string) => {
+  const formatAddress = useCallback((address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
-  }
+  }, [])
+  
+  const handleRemoveSource = useCallback(async (sourceId: string) => {
+    try {
+      await cryptoService.deleteDepositSource(sourceId)
+      setSources(prev => prev.filter(source => source.id !== sourceId))
+      toast.success('Deposit source removed successfully')
+      onSourceRemoved?.(sourceId)
+    } catch (error) {
+      console.error('Error removing deposit source:', error)
+      const errorMessage = getErrorMessage(error)
+      toast.error(errorMessage || 'Failed to remove deposit source')
+    }
+  }, [onSourceRemoved])
+
+  // Memoize the connected address display to prevent unnecessary re-renders
+  const displayAddress = useMemo(() => {
+    return connectedAddress ? formatAddress(connectedAddress) : ''
+  }, [connectedAddress, formatAddress])
 
   if (isLoading) {
     return (

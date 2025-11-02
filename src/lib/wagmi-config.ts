@@ -41,12 +41,16 @@ export const web3Modal = createWeb3Modal({
   }
 })
 
-// Create query client for React Query
+// Create query client for React Query with performance optimizations
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1
+      refetchOnMount: false,
+      refetchOnReconnect: false,
+      retry: 1,
+      staleTime: 30000, // Consider data fresh for 30 seconds
+      gcTime: 300000 // Keep unused data in cache for 5 minutes
     }
   }
 })

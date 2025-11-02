@@ -151,7 +151,7 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Network ID:</span>
-                <span className="text-sm font-mono">{poolInfo.network_id}</span>
+                <span className="text-sm font-mono">{poolInfo.network_id || 'N/A'}</span>
               </div>
             </CardContent>
           </Card>

@@ -16,9 +16,14 @@ import {
   Check, 
   AlertCircle,
   Wallet,
-  ExternalLink
+  ExternalLink,
+  Shield,
+  Clock
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAccount, useSignMessage } from 'wagmi'
+import { useWeb3Modal } from '@web3modal/wagmi/react'
+import { WalletConnectButton } from './wallet-connect-button'
 
 interface DepositSourceManagerProps {
   onSourceAdded?: (source: DepositSource) => void
@@ -32,7 +37,15 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
   const [newAddress, setNewAddress] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [challengeMessage, setChallengeMessage] = useState<string | null>(null)
+  const [pendingChallengeId, setPendingChallengeId] = useState<string | null>(null)
   const { user } = useAuthStore()
+  
+  // Wagmi hooks for wallet connection and signing
+  const { address: connectedAddress, isConnected } = useAccount()
+  const { signMessageAsync } = useSignMessage()
+  const { open } = useWeb3Modal()
 
   useEffect(() => {
     if (user?.id) {
@@ -73,20 +86,75 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
       return
     }
 
+    // Check if wallet is connected
+    if (!isConnected) {
+      toast.error('Please connect your wallet first')
+      open()
+      return
+    }
+
+    // Verify that the connected wallet matches the address to verify
+    const normalizedInput = newAddress.toLowerCase()
+    const normalizedConnected = connectedAddress?.toLowerCase()
+    
+    if (normalizedInput !== normalizedConnected) {
+      toast.error(`Please connect the wallet ${newAddress.slice(0, 6)}...${newAddress.slice(-4)} to verify ownership`)
+      return
+    }
+
     try {
       setIsAdding(true)
-      const newSource = await cryptoService.createDepositSource(user.id, newAddress.toLowerCase())
-      setSources(prev => [...prev, newSource])
-      setNewAddress('')
-      setIsDialogOpen(false)
-      toast.success('Deposit source added successfully')
-      onSourceAdded?.(newSource)
+      
+      // Step 1: Request verification challenge
+      const challenge = await cryptoService.requestVerificationChallenge({
+        user_id: user.id,
+        address: normalizedInput
+      })
+      
+      setChallengeMessage(challenge.challenge_message)
+      setPendingChallengeId(challenge.challenge_id)
+      
+      // Step 2: Request signature from connected wallet
+      setIsVerifying(true)
+      toast.info('Please sign the message in your wallet to verify ownership')
+      
+      const signature = await signMessageAsync({
+        message: challenge.challenge_message
+      })
+      
+      // Step 3: Submit signature for verification
+      const result = await cryptoService.confirmVerification({
+        challenge_id: challenge.challenge_id,
+        signed_message: signature
+      })
+      
+      if (result.verified) {
+        setSources(prev => [...prev, result.deposit_source])
+        setNewAddress('')
+        setChallengeMessage(null)
+        setPendingChallengeId(null)
+        setIsDialogOpen(false)
+        toast.success('Address verified and added successfully!')
+        onSourceAdded?.(result.deposit_source)
+      } else {
+        toast.error('Address verification failed')
+      }
     } catch (error) {
       console.error('Error adding deposit source:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to add deposit source'
       
-      if (errorMessage.includes('already mapped')) {
+      if (errorMessage.includes('User rejected') || errorMessage.includes('User denied')) {
+        toast.error('Signature request was cancelled')
+      } else if (errorMessage.includes('already mapped')) {
         toast.error('This address is already linked to another account')
+      } else if (errorMessage.includes('Maximum of 3 verified addresses')) {
+        toast.error('You can only verify up to 3 addresses. Remove an existing address to add a new one.')
+      } else if (errorMessage.includes('system wallet')) {
+        toast.error('This address cannot be used (system wallet)')
+      } else if (errorMessage.includes('Address was just verified by another user')) {
+        toast.error('This address was just verified by someone else. You can only verify addresses you own.')
+      } else if (errorMessage.includes('already verified by another user')) {
+        toast.error('This address is already verified by another user')
       } else if (errorMessage.includes('HTML instead of JSON') || errorMessage.includes('404')) {
         toast.error('Deposit source management is not available yet. Please try again later.')
       } else {
@@ -94,6 +162,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
       }
     } finally {
       setIsAdding(false)
+      setIsVerifying(false)
     }
   }
 
@@ -167,44 +236,108 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Deposit Source</DialogTitle>
+                <DialogTitle className="flex items-center space-x-2">
+                  <Shield className="h-5 w-5" />
+                  <span>Add & Verify Deposit Source</span>
+                </DialogTitle>
                 <DialogDescription>
-                  Link your Ethereum address to receive deposits. This address will be used to attribute deposits to your account.
+                  Link your Ethereum address and verify ownership to receive deposits.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                {/* Wallet Connection Section */}
                 <div className="space-y-2">
-                  <Label htmlFor="address">Ethereum Address</Label>
-                  <Input
-                    id="address"
-                    placeholder="0x..."
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    className="font-mono"
+                  <Label>Connect Wallet</Label>
+                  <WalletConnectButton 
+                    variant={isConnected ? "outline" : "default"}
+                    className="w-full"
                   />
+                  {isConnected && connectedAddress && (
+                    <p className="text-sm text-green-600 flex items-center gap-1">
+                      <Check className="h-4 w-4" />
+                      Wallet connected
+                    </p>
+                  )}
                   <p className="text-sm text-gray-500">
-                    Enter the address you'll be sending USDC from
+                    Connect the wallet you want to verify
                   </p>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Ethereum Address</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="address"
+                      placeholder="0x..."
+                      value={newAddress}
+                      onChange={(e) => setNewAddress(e.target.value)}
+                      className="font-mono flex-1"
+                    />
+                    {isConnected && connectedAddress && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setNewAddress(connectedAddress)}
+                        disabled={newAddress === connectedAddress}
+                      >
+                        Use Connected
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Enter the address you'll be sending USDC from (must match connected wallet)
+                  </p>
+                </div>
+                
+                <div className="flex items-center space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Shield className="h-4 w-4 text-blue-600" />
+                  <p className="text-sm text-blue-800">
+                    You'll be asked to sign a message with your wallet to prove ownership (no gas fees).
+                  </p>
+                </div>
+                
                 <div className="flex items-center space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <AlertCircle className="h-4 w-4 text-yellow-600" />
                   <p className="text-sm text-yellow-800">
-                    Make sure you control this address. Only send USDC from this address to receive deposits.
+                    Maximum 3 verified addresses per account. Only verified addresses can receive deposits.
                   </p>
                 </div>
+                
+                {isVerifying && challengeMessage && (
+                  <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <Clock className="h-4 w-4 text-green-600 animate-pulse" />
+                    <p className="text-sm text-green-800">
+                      Waiting for wallet signature...
+                    </p>
+                  </div>
+                )}
+                
                 <div className="flex justify-end space-x-2">
                   <Button 
                     variant="outline" 
-                    onClick={() => setIsDialogOpen(false)}
-                    disabled={isAdding}
+                    onClick={() => {
+                      setIsDialogOpen(false)
+                      setNewAddress('')
+                      setChallengeMessage(null)
+                      setPendingChallengeId(null)
+                    }}
+                    disabled={isAdding || isVerifying}
                   >
                     Cancel
                   </Button>
                   <Button 
                     onClick={handleAddSource}
-                    disabled={isAdding || !newAddress.trim()}
+                    disabled={isAdding || isVerifying || !newAddress.trim()}
                   >
-                    {isAdding ? 'Adding...' : 'Add Address'}
+                    {isAdding ? (
+                      isVerifying ? 'Verifying...' : 'Adding...'
+                    ) : (
+                      <>
+                        <Shield className="h-4 w-4 mr-2" />
+                        Add & Verify
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -230,18 +363,38 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
             {sources.map((source) => (
               <div 
                 key={source.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                className={`flex items-center justify-between p-4 border rounded-lg hover:border-gray-300 transition-colors ${
+                  source.verified ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+                }`}
               >
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Wallet className="h-4 w-4 text-blue-600" />
+                  <div className={`p-2 rounded-lg ${
+                    source.verified ? 'bg-green-100' : 'bg-yellow-100'
+                  }`}>
+                    {source.verified ? (
+                      <Shield className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    )}
                   </div>
                   <div>
-                    <div className="font-mono text-sm">
-                      {formatAddress(source.from_address)}
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-sm">
+                        {formatAddress(source.from_address)}
+                      </span>
+                      {source.verified ? (
+                        <Badge className="bg-green-100 text-green-800 text-xs">
+                          Verified
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-yellow-100 text-yellow-800 text-xs">
+                          Unverified
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500">
                       Added {new Date(source.created_at).toLocaleDateString()}
+                      {source.verified_at && ` • Verified ${new Date(source.verified_at).toLocaleDateString()}`}
                     </div>
                   </div>
                 </div>

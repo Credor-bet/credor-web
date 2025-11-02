@@ -4,7 +4,7 @@ import { supabase } from './supabase'
 export interface PublicPoolInfo {
   address: string
   network: string
-  network_id: number
+  network_id?: number
   usdc_contract: string
   is_testnet: boolean
 }
@@ -14,7 +14,72 @@ export interface DepositSource {
   user_id: string
   from_address: string
   created_at: string
+  verified?: boolean
+  verification_method?: string | null
+  verified_at?: string | null
+  verification_challenge?: string | null
+  challenge_expires_at?: string | null
 }
+
+export interface VerificationChallengeRequest {
+  user_id: string
+  address: string
+}
+
+export interface VerificationChallengeResponse {
+  challenge_id: string
+  challenge_message: string
+  expires_at: string
+}
+
+export interface VerificationConfirmRequest {
+  challenge_id: string
+  signed_message: string
+}
+
+export interface PendingChallenge {
+  id: string
+  user_id: string
+  address: string
+  challenge_message: string
+  expires_at: string
+  created_at: string
+}
+
+export interface PendingDeposit {
+  transaction_id: string
+  tx_hash: string
+  amount: number
+  status: 'processing'
+  message: string
+  estimated_completion: string
+  created_at: string
+}
+
+export interface DepositStatus {
+  status: 'processing' | 'completed' | 'failed'
+  message: string
+  data?: {
+    amount: number
+    tx_hash: string
+    from_address: string
+    to_address: string
+    created_at: string
+    confirmations: number
+    required_confirmations: number
+    progress_percent: number
+    estimated_completion: string
+    last_checked_at: string
+    final_balance?: number
+  }
+}
+
+export interface VerificationConfirmResponse {
+  verified: boolean
+  message: string
+  deposit_source: DepositSource
+}
+
 
 export interface WithdrawalRequest {
   user_id: string
@@ -92,7 +157,7 @@ class CryptoService {
   private authToken: string | null = null
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://7b7e1b4b6a42.ngrok-free.app'
+    this.baseUrl = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://0bc5724857cc.ngrok-free.app'
   }
 
   private async getAuthToken(): Promise<string> {
@@ -164,7 +229,7 @@ class CryptoService {
 
   // Public endpoints (no auth required)
   async getPublicPoolInfo(): Promise<PublicPoolInfo> {
-    return this.makeRequest<PublicPoolInfo>('/api/v1/pool-info')
+    return this.makeRequest<PublicPoolInfo>('/api/v1/pool-wallet/info')
   }
 
   async estimateWithdrawalFee(toAddress: string, amount: number): Promise<WithdrawalEstimate> {
@@ -236,6 +301,34 @@ class CryptoService {
 
   async getUserDepositHistory(userId: string): Promise<DepositHistory[]> {
     return this.makeRequest<DepositHistory[]>(`/api/v1/deposits/${userId}`)
+  }
+
+  // Address verification endpoints
+  async requestVerificationChallenge(request: VerificationChallengeRequest): Promise<VerificationChallengeResponse> {
+    return this.makeRequest<VerificationChallengeResponse>('/api/v1/deposit-sources/request-verification', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    })
+  }
+
+  async confirmVerification(request: VerificationConfirmRequest): Promise<VerificationConfirmResponse> {
+    return this.makeRequest<VerificationConfirmResponse>('/api/v1/deposit-sources/confirm-verification', {
+      method: 'POST',
+      body: JSON.stringify(request)
+    })
+  }
+
+  async getPendingChallenges(userId: string): Promise<PendingChallenge[]> {
+    return this.makeRequest<PendingChallenge[]>(`/api/v1/deposit-sources/challenges/${userId}`)
+  }
+
+  // New endpoints for block confirmation system
+  async getPendingDeposits(): Promise<PendingDeposit[]> {
+    return this.makeRequest<PendingDeposit[]>('/api/v1/deposits/pending')
+  }
+
+  async getDepositStatus(txHash: string): Promise<DepositStatus> {
+    return this.makeRequest<DepositStatus>(`/api/v1/deposits/${txHash}/status`)
   }
 
   // Utility methods

@@ -1,24 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { DM_Sans } from "next/font/google";
+// Removed next/font/google imports to avoid Turbopack internal font errors
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ClientProvider } from "@/components/providers/client-provider";
+import { Web3Provider } from "@/components/providers/web3-provider";
 
-const geist = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-});
+// Using system fonts to avoid runtime font fetch issues during development
 
 export const metadata: Metadata = {
   title: "Credor - Social Betting Platform",
@@ -32,12 +19,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geist.variable} ${geistMono.variable} ${dmSans.variable} antialiased`}>
-        <ClientProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </ClientProvider>
+      <body className={`antialiased`}>
+        <Web3Provider>
+          <ClientProvider>
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </ClientProvider>
+        </Web3Provider>
       </body>
     </html>
   );

@@ -26,6 +26,7 @@ import { CryptoDepositModal } from '@/components/crypto/crypto-deposit-modal'
 import { CryptoWithdrawalModal } from '@/components/crypto/crypto-withdrawal-modal'
 import { CryptoManagementModal } from '@/components/crypto/crypto-management-modal'
 import { PaymentMethodSelectionModal } from '@/components/crypto/payment-method-selection-modal'
+import { PendingDepositsNotification } from '@/components/crypto/pending-deposits-notification'
 
 interface Transaction {
   id: string
@@ -188,6 +189,9 @@ export default function WalletPage() {
         </div>
       </div>
 
+      {/* Pending Deposits Notification */}
+      <PendingDepositsNotification />
+
       {/* Balance Card */}
       <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
         <CardHeader>
@@ -323,9 +327,9 @@ export default function WalletPage() {
                             Available
                           </Badge>
                         ) : processor.comingSoon ? (
-                          <Badge variant="outline" className="text-xs">
-                            Coming Soon
-                          </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          Coming Soon
+                        </Badge>
                         ) : null}
                       </div>
                       <div className="text-sm text-gray-500">

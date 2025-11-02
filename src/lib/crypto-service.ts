@@ -217,11 +217,30 @@ class CryptoService {
     }
 
     if (!response.ok) {
-      const errorData: ApiError = await response.json().catch(() => ({
-        error: 'Unknown error',
-        detail: `HTTP ${response.status}`
-      }))
-      throw new Error(errorData.detail || errorData.error)
+      let errorData: ApiError
+      try {
+        errorData = await response.json()
+      } catch {
+        errorData = {
+          error: 'Unknown error',
+          detail: `HTTP ${response.status}`
+        }
+      }
+      
+      // FastAPI validation errors (422) often have detailed field-level errors
+      if (response.status === 422 && Array.isArray(errorData.detail)) {
+        // Format FastAPI validation errors into a readable message
+        const validationErrors = errorData.detail.map((err: any) => {
+          const field = err.loc?.join('.') || 'field'
+          const message = err.msg || 'Invalid value'
+          return `${field}: ${message}`
+        }).join(', ')
+        throw new Error(`Validation error: ${validationErrors}`)
+      }
+      
+      // For other errors, use detail or error field
+      const errorMessage = errorData.detail || errorData.error || `HTTP ${response.status}`
+      throw new Error(errorMessage)
     }
 
     return response.json()

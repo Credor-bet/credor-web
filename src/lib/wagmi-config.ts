@@ -8,13 +8,20 @@ import { QueryClient } from '@tanstack/react-query'
 
 // Get project ID from environment variables
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-project-id'
+const alchemyKey = process.env.NEXT_PUBLIC_ALCHEMY_KEY
 
 // Create wagmi config
 export const config = createConfig({
   chains: [polygon, polygonAmoy],
   transports: {
-    [polygon.id]: http(),
-    [polygonAmoy.id]: http()
+    [polygon.id]: http(
+      alchemyKey ? `https://polygon-mainnet.g.alchemy.com/v2/${alchemyKey}` : undefined,
+      { batch: true, timeout: 8000 }
+    ),
+    [polygonAmoy.id]: http(
+      alchemyKey ? `https://polygon-amoy.g.alchemy.com/v2/${alchemyKey}` : undefined,
+      { batch: true, timeout: 8000 }
+    )
   },
   connectors: [
     injected({ shimDisconnect: true }),

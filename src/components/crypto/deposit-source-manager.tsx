@@ -372,7 +372,22 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
       
       // Step 2: Request signature from connected wallet
       setIsVerifying(true)
+      
+      // Double-check address before signing (important for Base Wallet which might use different account)
+      if (connectedAddress && connectedAddress.toLowerCase() !== normalizedInput.toLowerCase()) {
+        const errorMsg = `Connected wallet address (${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}) does not match the address you entered (${normalizedInput.slice(0, 6)}...${normalizedInput.slice(-4)}). Please connect the correct wallet or update the address field.`
+        setVerificationError(errorMsg)
+        toast.error('Address Mismatch', {
+          description: errorMsg,
+          duration: 10000
+        })
+        setIsVerifying(false)
+        setIsAdding(false)
+        return
+      }
+      
       toast.info('Please sign the message in your wallet to verify ownership')
+      console.log('Requesting signature from address:', normalizedInput, 'Connected address:', connectedAddress)
       
       // Use a timeout to prevent hanging on slow wallets
       let timeoutId: NodeJS.Timeout | null = null
@@ -528,6 +543,32 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
         toast.error('This address was just verified by someone else. You can only verify addresses you own.')
       } else if (lowerErrorMessage.includes('already verified by another user')) {
         toast.error('This address is already verified by another user')
+      } else if (lowerErrorMessage.includes('signature doesn\'t match address') ||
+                 lowerErrorMessage.includes('signature was from') ||
+                 lowerErrorMessage.includes('expected') && lowerErrorMessage.includes('but signature')) {
+        // Extract addresses from error message
+        const expectedMatch = errorMessage.match(/expected\s+(0x[a-fA-F0-9]+)/i)
+        const signatureFromMatch = errorMessage.match(/signature was from\s+(0x[a-fA-F0-9]+)/i)
+        
+        const expectedAddr = expectedMatch ? expectedMatch[1] : null
+        const signedFromAddr = signatureFromMatch ? signatureFromMatch[1] : null
+        
+        let addressMismatchMsg = 'The signature was created by a different wallet address than expected. '
+        
+        if (expectedAddr && signedFromAddr) {
+          const expectedShort = `${expectedAddr.slice(0, 6)}...${expectedAddr.slice(-4)}`
+          const signedShort = `${signedFromAddr.slice(0, 6)}...${signedFromAddr.slice(-4)}`
+          addressMismatchMsg += `\nExpected: ${expectedShort}\nSigned by: ${signedShort}`
+          addressMismatchMsg += '\n\nPlease make sure you are signing with the correct wallet account.'
+        } else {
+          addressMismatchMsg += 'Please ensure you are signing with the wallet address you entered above.'
+        }
+        
+        setVerificationError(addressMismatchMsg)
+        toast.error('Address Mismatch: Signature from wrong wallet account', {
+          description: addressMismatchMsg,
+          duration: 12000
+        })
       } else if (lowerErrorMessage.includes('html instead of json') || 
                  lowerErrorMessage.includes('404') ||
                  lowerErrorMessage.includes('not found')) {

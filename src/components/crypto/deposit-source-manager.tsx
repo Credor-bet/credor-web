@@ -70,6 +70,8 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
   const [isVerifying, setIsVerifying] = useState(false)
   const [challengeMessage, setChallengeMessage] = useState<string | null>(null)
   const [pendingChallengeId, setPendingChallengeId] = useState<string | null>(null)
+  const [verificationError, setVerificationError] = useState<string | null>(null)
+  const [signatureInfo, setSignatureInfo] = useState<{ length?: number; hasPrefix?: boolean } | null>(null)
   const { user } = useAuthStore()
   
   // Wagmi hooks for wallet connection and signing
@@ -135,6 +137,8 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
 
     try {
       setIsAdding(true)
+      setVerificationError(null)
+      setSignatureInfo(null)
       
       // Step 1: Request verification challenge
       const challenge = await cryptoService.requestVerificationChallenge({
@@ -167,10 +171,44 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
           clearTimeout(timeoutId)
         }
         
+        // Log signature info for debugging
+        const sigLength = signature?.length
+        const hasPrefix = signature?.startsWith('0x')
+        
+        console.log('Signature received from wallet:', {
+          length: sigLength,
+          startsWith0x: hasPrefix,
+          preview: signature?.substring(0, 30) + '...',
+          fullSignature: signature // Log full signature for debugging
+        })
+        
+        // Store signature info for visible feedback
+        setSignatureInfo({
+          length: sigLength,
+          hasPrefix: hasPrefix || false
+        })
+        
+        // Normalize signature format - ensure it's a hex string with 0x prefix
+        let normalizedSignature = signature
+        if (signature && typeof signature === 'string') {
+          // Remove any whitespace
+          normalizedSignature = signature.trim()
+          // Ensure it starts with 0x
+          if (!normalizedSignature.startsWith('0x')) {
+            normalizedSignature = '0x' + normalizedSignature
+          }
+        }
+        
+        console.log('Normalized signature before sending:', {
+          originalLength: signature?.length,
+          normalizedLength: normalizedSignature?.length,
+          preview: normalizedSignature?.substring(0, 30) + '...'
+        })
+        
         // Continue with verification...
         const result = await cryptoService.confirmVerification({
           challenge_id: challenge.challenge_id,
-          signed_message: signature
+          signed_message: normalizedSignature
         })
         
         if (result.verified) {
@@ -178,11 +216,15 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
           setNewAddress('')
           setChallengeMessage(null)
           setPendingChallengeId(null)
+          setVerificationError(null)
+          setSignatureInfo(null)
           setIsDialogOpen(false)
           toast.success('Address verified and added successfully!')
           onSourceAdded?.(result.deposit_source)
         } else {
-          toast.error('Address verification failed')
+          const errorMsg = 'Address verification failed'
+          setVerificationError(errorMsg)
+          toast.error(errorMsg)
         }
       } catch (signError) {
         // Clean up timeout on error
@@ -217,13 +259,42 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                  lowerErrorMessage.includes('404') ||
                  lowerErrorMessage.includes('not found')) {
         toast.error('Deposit source management is not available yet. Please try again later.')
+      } else if (lowerErrorMessage.includes('422') || 
+                 lowerErrorMessage.includes('unprocessable') ||
+                 lowerErrorMessage.includes('validation error')) {
+        // Backend validation error - show the actual error message
+        console.error('Backend validation error (422):', error)
+        console.error('Full error object:', JSON.stringify(error, null, 2))
+        
+        // Extract the detailed validation message
+        let displayMessage = errorMessage
+        if (errorMessage.includes('Validation error:') && errorMessage.length < 200) {
+          // Show the full validation error if it's reasonable length
+          displayMessage = errorMessage
+        } else if (errorMessage.includes('422') || errorMessage.includes('HTTP')) {
+          displayMessage = 'Validation error: The signature format may not be supported by this wallet. Please try a different wallet or contact support.'
+        }
+        
+        // Store error for visible display
+        setVerificationError(displayMessage)
+        toast.error(displayMessage, {
+          duration: 10000, // Show longer for validation errors
+          description: signatureInfo ? `Signature length: ${signatureInfo.length}, Has 0x prefix: ${signatureInfo.hasPrefix}` : undefined
+        })
       } else if (lowerErrorMessage.includes('timed out') || 
                  lowerErrorMessage.includes('timeout')) {
         toast.error('Signature request took too long. Please try again.')
       } else {
         // Show a generic error message for unknown errors to avoid showing [object Object]
-        toast.error('Failed to verify address. Please try again.')
         console.error('Unknown error in handleAddSource:', error)
+        console.error('Error type:', typeof error)
+        console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
+        
+        // Store error for visible display
+        setVerificationError(errorMessage || 'Failed to verify address. Please try again.')
+        toast.error(errorMessage || 'Failed to verify address. Please try again.', {
+          duration: 8000
+        })
       }
     } finally {
       setIsAdding(false)
@@ -385,6 +456,33 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                   </div>
                 )}
                 
+                {signatureInfo && !verificationError && (
+                  <div className="flex items-center space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <Shield className="h-4 w-4 text-blue-600" />
+                    <div className="flex-1">
+                      <p className="text-sm text-blue-800 font-medium">Signature received</p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Length: {signatureInfo.length} chars, Has 0x prefix: {signatureInfo.hasPrefix ? 'Yes' : 'No'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {verificationError && (
+                  <div className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-red-800 font-medium">Verification Failed</p>
+                      <p className="text-xs text-red-700 mt-1 break-words">{verificationError}</p>
+                      {signatureInfo && (
+                        <p className="text-xs text-red-600 mt-2">
+                          Signature info: {signatureInfo.length} chars, 0x prefix: {signatureInfo.hasPrefix ? 'Yes' : 'No'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex justify-end space-x-2">
                   <Button 
                     variant="outline" 
@@ -393,6 +491,8 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                       setNewAddress('')
                       setChallengeMessage(null)
                       setPendingChallengeId(null)
+                      setVerificationError(null)
+                      setSignatureInfo(null)
                     }}
                     disabled={isAdding || isVerifying}
                   >

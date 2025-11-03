@@ -85,20 +85,97 @@ function extractSignature(signature: unknown): string | null {
       }
       
       // If JSON parsing failed or extraction failed, don't return the long string
-      // Try to find a hex substring that looks like a signature
-      // Signature is: 0x + 128 hex chars (r=64 + s=64) OR 0x + 130 hex chars (with extended recovery)
-      const hexMatch = trimmed.match(/0x[a-fA-F0-9]{128}([a-fA-F0-9]{2,4})?/)
-      if (hexMatch) {
-        const matched = hexMatch[0]
-        // Verify it's exactly 130 or 132 chars
+      // Base Wallet might return ABI-encoded data with signature embedded
+      // Try to find hex substrings that look like signatures (130 or 132 chars with 0x)
+      
+      // Method 1: Look for standalone 130-132 char hex patterns
+      const standalonePattern = trimmed.match(/\b0x[a-fA-F0-9]{128}([a-fA-F0-9]{2,4})?\b/)
+      if (standalonePattern) {
+        const matched = standalonePattern[0]
         if (matched.length === 130 || matched.length === 132) {
-          console.log('Found hex signature pattern in long string:', matched.substring(0, 20) + '...')
+          console.log('Found standalone hex signature pattern in long string')
           return matched
+        }
+      }
+      
+      // Method 2: Search for 130-char hex sequences (without 0x requirement, might be embedded)
+      // A signature is 65 bytes = 130 hex chars (r=32 bytes + s=32 bytes + v=1 byte)
+      // Look for sequences that look like valid cryptographic signatures
+      const hexOnly = trimmed.replace(/0x/g, '').toLowerCase()
+      
+      // Score function to evaluate if a hex string looks like a signature
+      const scoreSignature = (hex: string): number => {
+        let score = 0
+        // High entropy (many unique chars) is good
+        const uniqueChars = new Set(hex).size
+        score += Math.min(uniqueChars / 16, 1) * 30 // Max 30 points
+        
+        // No obvious repeating patterns
+        const hasRepeatingPattern = /(.{2,})\1{3,}/.test(hex) // 4+ repeats of 2+ char pattern
+        if (!hasRepeatingPattern) score += 20
+        
+        // Check r and s components are reasonable (not all 0s or fs)
+        const r = hex.substring(0, 64)
+        const s = hex.substring(64, 128)
+        const v = hex.substring(128, 130)
+        
+        if (r !== '0'.repeat(64) && r !== 'f'.repeat(64)) score += 20
+        if (s !== '0'.repeat(64) && s !== 'f'.repeat(64)) score += 20
+        
+        // V should be reasonable (typically 1b, 1c, 00, 01)
+        const validV = ['1b', '1c', '00', '01', '1a', '1d'].includes(v)
+        if (validV) score += 10
+        
+        return score
+      }
+      
+      // Try to find 130-char sequences with good signature scores
+      const potentialSigs: Array<{ sig: string; index: number; score: number }> = []
+      for (let i = 0; i <= hexOnly.length - 130; i++) {
+        const candidate = hexOnly.substring(i, i + 130)
+        if (/^[0-9a-f]{130}$/.test(candidate)) {
+          const score = scoreSignature(candidate)
+          // Only consider if score is reasonably high (signature-like)
+          if (score > 40) {
+            potentialSigs.push({
+              sig: '0x' + candidate,
+              index: i,
+              score
+            })
+          }
+        }
+      }
+      
+      // Use the highest scoring signature candidate
+      if (potentialSigs.length > 0) {
+        potentialSigs.sort((a, b) => b.score - a.score)
+        const bestMatch = potentialSigs[0]
+        console.log(`Found ${potentialSigs.length} potential signature patterns, best score: ${bestMatch.score}, using:`, bestMatch.sig.substring(0, 30) + '...')
+        return bestMatch.sig
+      }
+      
+      // Method 3: If it's exactly 3010 chars and starts with 0x, it might be ABI-encoded
+      // Try to extract signature from end or from known positions
+      // Base Wallet might append signature at the end
+      if (trimmed.length >= 130) {
+        // Check last 132 chars (might be signature with 0x)
+        const last132 = trimmed.slice(-132)
+        if (/^0x[0-9a-fA-F]{130}$/.test(last132)) {
+          console.log('Found signature at end of long string')
+          return last132
+        }
+        
+        // Check last 130 chars (signature without 0x at end)
+        const last130hex = trimmed.slice(-130)
+        if (/^[0-9a-fA-F]{130}$/.test(last130hex)) {
+          console.log('Found hex signature at end (without 0x)')
+          return '0x' + last130hex
         }
       }
       
       // Last resort: if it's just a very long hex string, it's probably not a signature
       // Don't return invalid data
+      console.warn('Could not extract signature from long hex string')
       return null
     }
     
@@ -357,9 +434,14 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
         
         if (!extractedSignature) {
           // Keep raw response visible, but show error
-          const errorMsg = 'Failed to extract signature from wallet response. Please check the raw response below and share it for debugging.'
+          const errorMsg = 'Base Wallet returned an unexpected format. This may be a wallet compatibility issue. Please try a different wallet (MetaMask, 1inch) or share the raw response for debugging.'
           setVerificationError(errorMsg)
           throw new Error(errorMsg)
+        }
+        
+        // Double-check extracted signature looks valid
+        if (extractedSignature.length !== 130 && extractedSignature.length !== 132) {
+          console.warn('Extracted signature has unexpected length:', extractedSignature.length)
         }
         
         // Validate extracted signature format

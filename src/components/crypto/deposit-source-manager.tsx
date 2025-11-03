@@ -55,6 +55,120 @@ function getErrorMessage(error: unknown): string {
   return 'An unknown error occurred'
 }
 
+// Helper function to extract signature from different wallet formats
+function extractSignature(signature: unknown): string | null {
+  if (!signature) {
+    return null
+  }
+
+  // If it's already a simple hex string (normal case)
+  if (typeof signature === 'string') {
+    const trimmed = signature.trim()
+    
+    // If it's a reasonable length for a signature (130-132 chars with 0x)
+    if (trimmed.length >= 128 && trimmed.length <= 134) {
+      return trimmed.startsWith('0x') ? trimmed : '0x' + trimmed
+    }
+    
+    // If it's very long, try parsing as JSON
+    if (trimmed.length > 200) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        return extractSignature(parsed)
+      } catch {
+        // Not JSON, continue below
+      }
+    }
+    
+    // Still return it normalized (some wallets might have weird formats)
+    return trimmed.startsWith('0x') ? trimmed : '0x' + trimmed
+  }
+
+  // If it's an object, try to extract signature fields
+  if (typeof signature === 'object' && signature !== null) {
+    const obj = signature as Record<string, unknown>
+    
+    // Try common signature field names (case-insensitive search through keys)
+    const signatureKeys = [
+      'signature', 'rawSignature', 'sig', 'signedMessage', 'signed_message',
+      'signatureHash', 'signature_hash', 'result', 'data', 'value',
+      'messageHash', 'message_hash', 'hex', 'hash'
+    ]
+    
+    for (const key of signatureKeys) {
+      // Check exact match
+      if (obj[key] && typeof obj[key] === 'string') {
+        const sig = (obj[key] as string).trim()
+        // Validate it looks like a signature
+        if (sig.length >= 128 && sig.length <= 134) {
+          return sig.startsWith('0x') ? sig : '0x' + sig
+        }
+      }
+      
+      // Check case-insensitive match
+      const lowerKey = key.toLowerCase()
+      for (const objKey of Object.keys(obj)) {
+        if (objKey.toLowerCase() === lowerKey && typeof obj[objKey] === 'string') {
+          const sig = (obj[objKey] as string).trim()
+          if (sig.length >= 128 && sig.length <= 134) {
+            return sig.startsWith('0x') ? sig : '0x' + sig
+          }
+        }
+      }
+    }
+    
+    // Try extracting from r, s, v format (some wallets return split signatures)
+    if (typeof obj.r === 'string' && typeof obj.s === 'string') {
+      let r = obj.r.trim()
+      let s = obj.s.trim()
+      let v = obj.v
+      
+      // Remove 0x prefixes for concatenation
+      r = r.startsWith('0x') ? r.slice(2) : r
+      s = s.startsWith('0x') ? s.slice(2) : s
+      
+      // Get v value (recovery ID)
+      let vHex = '1c' // Default recovery ID
+      if (typeof v === 'number') {
+        vHex = v.toString(16).padStart(2, '0')
+      } else if (typeof v === 'string') {
+        vHex = v.trim()
+        if (vHex.startsWith('0x')) {
+          vHex = vHex.slice(2)
+        }
+        vHex = vHex.padStart(2, '0')
+      }
+      
+      // Reconstruct signature: r + s + v
+      const reconstructed = '0x' + r + s + vHex
+      if (reconstructed.length >= 130 && reconstructed.length <= 134) {
+        return reconstructed
+      }
+    }
+    
+    // Try nested signature objects (recursive search)
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object') {
+        const nested = extractSignature(value)
+        if (nested) return nested
+      }
+    }
+    
+    // If it's an array, try first element
+    if (Array.isArray(obj) && obj.length > 0) {
+      const first = extractSignature(obj[0])
+      if (first) return first
+    }
+    
+    // Log structure for debugging (limit size to avoid huge logs)
+    const preview = JSON.stringify(obj).substring(0, 500)
+    console.warn('Unknown signature format, structure preview:', preview)
+    console.warn('Object keys:', Object.keys(obj))
+  }
+
+  return null
+}
+
 interface DepositSourceManagerProps {
   onSourceAdded?: (source: DepositSource) => void
   onSourceRemoved?: (sourceId: string) => void
@@ -71,7 +185,12 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
   const [challengeMessage, setChallengeMessage] = useState<string | null>(null)
   const [pendingChallengeId, setPendingChallengeId] = useState<string | null>(null)
   const [verificationError, setVerificationError] = useState<string | null>(null)
-  const [signatureInfo, setSignatureInfo] = useState<{ length?: number; hasPrefix?: boolean } | null>(null)
+  const [signatureInfo, setSignatureInfo] = useState<{ 
+    length?: number; 
+    hasPrefix?: boolean;
+    rawLength?: number;
+    rawType?: string;
+  } | null>(null)
   const { user } = useAuthStore()
   
   // Wagmi hooks for wallet connection and signing
@@ -171,39 +290,58 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
           clearTimeout(timeoutId)
         }
         
-        // Log signature info for debugging
-        const sigLength = signature?.length
-        const hasPrefix = signature?.startsWith('0x')
+        // Log raw signature info for debugging
+        const rawSigType = typeof signature
+        const rawSigLength = typeof signature === 'string' ? signature.length : JSON.stringify(signature).length
         
-        console.log('Signature received from wallet:', {
-          length: sigLength,
-          startsWith0x: hasPrefix,
-          preview: signature?.substring(0, 30) + '...',
-          fullSignature: signature // Log full signature for debugging
+        console.log('Raw signature received from wallet:', {
+          type: rawSigType,
+          length: rawSigLength,
+          preview: typeof signature === 'string' 
+            ? signature.substring(0, 100) + '...' 
+            : JSON.stringify(signature).substring(0, 100) + '...',
+          isObject: typeof signature === 'object'
         })
         
-        // Store signature info for visible feedback
-        setSignatureInfo({
-          length: sigLength,
-          hasPrefix: hasPrefix || false
-        })
+        // Extract actual signature from wallet response
+        const extractedSignature = extractSignature(signature)
         
-        // Normalize signature format - ensure it's a hex string with 0x prefix
-        let normalizedSignature = signature
-        if (signature && typeof signature === 'string') {
-          // Remove any whitespace
-          normalizedSignature = signature.trim()
-          // Ensure it starts with 0x
-          if (!normalizedSignature.startsWith('0x')) {
-            normalizedSignature = '0x' + normalizedSignature
-          }
+        if (!extractedSignature) {
+          throw new Error('Failed to extract signature from wallet response. Please try again.')
         }
         
-        console.log('Normalized signature before sending:', {
-          originalLength: signature?.length,
-          normalizedLength: normalizedSignature?.length,
-          preview: normalizedSignature?.substring(0, 30) + '...'
+        // Validate extracted signature format
+        const sigLength = extractedSignature.length
+        const hasPrefix = extractedSignature.startsWith('0x')
+        
+        // Expected: 130 chars (0x + 128 hex = 65 bytes) or 132 with recovery ID
+        if (sigLength < 128 || sigLength > 134) {
+          console.error('Invalid signature length after extraction:', {
+            extractedLength: sigLength,
+            extractedPreview: extractedSignature.substring(0, 50) + '...',
+            rawType: rawSigType,
+            rawLength: rawSigLength
+          })
+          throw new Error(`Invalid signature format: expected 130-132 chars, got ${sigLength}. Please try again.`)
+        }
+        
+        console.log('Extracted signature:', {
+          length: sigLength,
+          startsWith0x: hasPrefix,
+          preview: extractedSignature.substring(0, 30) + '...',
+          rawLength: rawSigLength
         })
+        
+        // Store signature info for visible feedback (including raw data for debugging)
+        setSignatureInfo({
+          length: sigLength,
+          hasPrefix: hasPrefix || false,
+          rawLength: rawSigLength,
+          rawType: rawSigType
+        })
+        
+        // Use extracted and normalized signature
+        const normalizedSignature = extractedSignature
         
         // Continue with verification...
         const result = await cryptoService.confirmVerification({
@@ -462,7 +600,10 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                     <div className="flex-1">
                       <p className="text-sm text-blue-800 font-medium">Signature received</p>
                       <p className="text-xs text-blue-600 mt-1">
-                        Length: {signatureInfo.length} chars, Has 0x prefix: {signatureInfo.hasPrefix ? 'Yes' : 'No'}
+                        Extracted: {signatureInfo.length} chars, Has 0x prefix: {signatureInfo.hasPrefix ? 'Yes' : 'No'}
+                        {signatureInfo.rawLength && signatureInfo.rawLength !== signatureInfo.length && (
+                          <span className="ml-2">(Raw: {signatureInfo.rawLength} chars, {signatureInfo.rawType})</span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -476,7 +617,12 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                       <p className="text-xs text-red-700 mt-1 break-words">{verificationError}</p>
                       {signatureInfo && (
                         <p className="text-xs text-red-600 mt-2">
-                          Signature info: {signatureInfo.length} chars, 0x prefix: {signatureInfo.hasPrefix ? 'Yes' : 'No'}
+                          Extracted signature: {signatureInfo.length} chars, 0x prefix: {signatureInfo.hasPrefix ? 'Yes' : 'No'}
+                          {signatureInfo.rawLength && signatureInfo.rawLength !== signatureInfo.length && (
+                            <span className="block mt-1">
+                              Raw signature: {signatureInfo.rawLength} chars ({signatureInfo.rawType})
+                            </span>
+                          )}
                         </p>
                       )}
                     </div>

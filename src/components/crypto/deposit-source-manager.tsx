@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner'
 import { useAccount, useSignMessage } from 'wagmi'
 import { useWeb3Modal } from '@web3modal/wagmi/react'
+import { recoverMessageAddress } from 'viem'
 import { WalletConnectButton } from './wallet-connect-button'
 
 // Helper function to safely extract error message
@@ -147,10 +148,13 @@ function extractSignature(signature: unknown): string | null {
       }
       
       // Use the highest scoring signature candidate
+      // But we'll verify it matches the expected address in the calling code
       if (potentialSigs.length > 0) {
         potentialSigs.sort((a, b) => b.score - a.score)
         const bestMatch = potentialSigs[0]
         console.log(`Found ${potentialSigs.length} potential signature patterns, best score: ${bestMatch.score}, using:`, bestMatch.sig.substring(0, 30) + '...')
+        // Return all high-scoring candidates so we can test which one matches
+        // For now return the best one - caller will verify it matches the address
         return bestMatch.sig
       }
       
@@ -489,13 +493,97 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
           rawType: rawSigType
         })
         
-        // Use extracted and normalized signature
-        const normalizedSignature = extractedSignature
+        // IMPORTANT: Verify the signature matches the expected address before sending to backend
+        // This prevents Base Wallet from signing with wrong account
+        // If Base Wallet returns ABI-encoded data with multiple signatures, we need to find the right one
+        let verifiedSignature = extractedSignature
+        let addressMatches = false
         
+        try {
+          const recoveredAddress = await recoverMessageAddress({
+            message: challenge.challenge_message,
+            signature: verifiedSignature as `0x${string}`
+          })
+          
+          const recoveredLower = recoveredAddress.toLowerCase()
+          const expectedLower = normalizedInput.toLowerCase()
+          
+          console.log('Signature recovery check:', {
+            recovered: recoveredAddress,
+            expected: normalizedInput,
+            matches: recoveredLower === expectedLower
+          })
+          
+          if (recoveredLower === expectedLower) {
+            addressMatches = true
+            console.log('✓ Signature address matches expected address')
+          } else {
+            // Signature doesn't match - if we have a long hex string, try finding the correct signature
+            console.warn('Extracted signature does not match expected address')
+            console.warn(`Expected: ${normalizedInput}, Got: ${recoveredAddress}`)
+            
+            // If the raw response was a long hex string, try extracting and testing other signatures
+            if (typeof signature === 'string' && signature.length > 1000) {
+              console.log('Attempting to find correct signature in long hex string...')
+              const hexOnly = signature.replace(/0x/g, '').toLowerCase()
+              const expectedLowerNoPrefix = normalizedInput.toLowerCase().replace('0x', '')
+              
+              // Try to find all potential signatures and test each one
+              const testCandidates: Array<{ sig: string; index: number }> = []
+              for (let i = 0; i <= hexOnly.length - 130; i++) {
+                const candidate = hexOnly.substring(i, i + 130)
+                if (/^[0-9a-f]{130}$/.test(candidate)) {
+                  testCandidates.push({
+                    sig: '0x' + candidate,
+                    index: i
+                  })
+                }
+              }
+              
+              // Test each candidate to find one that matches our address
+              console.log(`Testing ${testCandidates.length} signature candidates...`)
+              for (const candidate of testCandidates.slice(0, 20)) { // Limit to first 20 to avoid performance issues
+                try {
+                  const testRecovered = await recoverMessageAddress({
+                    message: challenge.challenge_message,
+                    signature: candidate.sig as `0x${string}`
+                  })
+                  
+                  if (testRecovered.toLowerCase() === normalizedInput.toLowerCase()) {
+                    console.log(`✓ Found matching signature at index ${candidate.index}`)
+                    verifiedSignature = candidate.sig
+                    addressMatches = true
+                    break
+                  }
+                } catch {
+                  // Invalid signature, skip
+                }
+              }
+            }
+            
+            if (!addressMatches) {
+              const errorMsg = `Signature was created by a different address than expected.\n\nExpected: ${normalizedInput.slice(0, 6)}...${normalizedInput.slice(-4)}\nSigned by: ${recoveredAddress.slice(0, 6)}...${recoveredAddress.slice(-4)}\n\nBase Wallet may be signing with a different account. Please ensure the correct account is selected in Base Wallet.`
+              setVerificationError(errorMsg)
+              toast.error('Address Mismatch Detected', {
+                description: `Signature from ${recoveredAddress.slice(0, 6)}...${recoveredAddress.slice(-4)} but expected ${normalizedInput.slice(0, 6)}...${normalizedInput.slice(-4)}`,
+                duration: 12000
+              })
+              setIsVerifying(false)
+              setIsAdding(false)
+              return
+            }
+          }
+        } catch (recoveryError) {
+          console.error('Failed to recover address from signature:', recoveryError)
+          // Continue anyway - backend will catch this, but log the error
+          toast.warning('Could not verify signature address locally. Proceeding with backend verification...')
+        }
+        
+        // Use the verified signature (may be different from initially extracted one)
         // Continue with verification...
         const result = await cryptoService.confirmVerification({
           challenge_id: challenge.challenge_id,
-          signed_message: normalizedSignature
+          signed_message: verifiedSignature
         })
         
         if (result.verified) {

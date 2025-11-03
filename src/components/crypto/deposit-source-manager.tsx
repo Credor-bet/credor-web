@@ -214,6 +214,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
     rawLength?: number;
     rawType?: string;
   } | null>(null)
+  const [rawWalletResponse, setRawWalletResponse] = useState<string | null>(null)
   const { user } = useAuthStore()
   
   // Wagmi hooks for wallet connection and signing
@@ -281,6 +282,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
       setIsAdding(true)
       setVerificationError(null)
       setSignatureInfo(null)
+      setRawWalletResponse(null)
       
       // Step 1: Request verification challenge
       const challenge = await cryptoService.requestVerificationChallenge({
@@ -340,11 +342,24 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
           }
         }
         
+        // Store raw response for debugging (stringify if needed)
+        try {
+          const rawResponseString = typeof signature === 'string' 
+            ? signature 
+            : JSON.stringify(signature, null, 2)
+          setRawWalletResponse(rawResponseString)
+        } catch (stringifyError) {
+          setRawWalletResponse(String(signature))
+        }
+        
         // Extract actual signature from wallet response
         const extractedSignature = extractSignature(signature)
         
         if (!extractedSignature) {
-          throw new Error('Failed to extract signature from wallet response. Please try again.')
+          // Keep raw response visible, but show error
+          const errorMsg = 'Failed to extract signature from wallet response. Please check the raw response below and share it for debugging.'
+          setVerificationError(errorMsg)
+          throw new Error(errorMsg)
         }
         
         // Validate extracted signature format
@@ -393,6 +408,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
           setPendingChallengeId(null)
           setVerificationError(null)
           setSignatureInfo(null)
+          setRawWalletResponse(null)
           setIsDialogOpen(false)
           toast.success('Address verified and added successfully!')
           onSourceAdded?.(result.deposit_source)
@@ -666,6 +682,38 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                   </div>
                 )}
                 
+                {rawWalletResponse && (
+                  <div className="flex flex-col space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-800">Raw Wallet Response (for debugging):</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(rawWalletResponse)
+                          toast.success('Raw response copied to clipboard!')
+                        }}
+                        className="h-7 text-xs"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copy
+                      </Button>
+                    </div>
+                    <textarea
+                      readOnly
+                      value={rawWalletResponse}
+                      className="w-full p-2 text-xs font-mono bg-white border border-gray-300 rounded resize-none"
+                      rows={8}
+                      onClick={(e) => e.currentTarget.select()}
+                      style={{ minHeight: '100px', maxHeight: '300px' }}
+                    />
+                    <p className="text-xs text-gray-600">
+                      Length: {rawWalletResponse.length} characters
+                    </p>
+                  </div>
+                )}
+                
                 <div className="flex justify-end space-x-2">
                   <Button 
                     variant="outline" 
@@ -676,6 +724,7 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
                       setPendingChallengeId(null)
                       setVerificationError(null)
                       setSignatureInfo(null)
+                      setRawWalletResponse(null)
                     }}
                     disabled={isAdding || isVerifying}
                   >

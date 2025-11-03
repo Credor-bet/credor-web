@@ -70,18 +70,41 @@ function extractSignature(signature: unknown): string | null {
       return trimmed.startsWith('0x') ? trimmed : '0x' + trimmed
     }
     
-    // If it's very long, try parsing as JSON
+    // If it's very long, try parsing as JSON (Base Wallet might return JSON)
     if (trimmed.length > 200) {
       try {
         const parsed = JSON.parse(trimmed)
-        return extractSignature(parsed)
-      } catch {
-        // Not JSON, continue below
+        const extracted = extractSignature(parsed)
+        // Only return if extraction was successful
+        if (extracted) {
+          return extracted
+        }
+      } catch (parseError) {
+        // Not valid JSON, log for debugging
+        console.warn('Long string is not valid JSON, first 200 chars:', trimmed.substring(0, 200))
       }
+      
+      // If JSON parsing failed or extraction failed, don't return the long string
+      // Try to find a hex substring that looks like a signature
+      // Signature is: 0x + 128 hex chars (r=64 + s=64) OR 0x + 130 hex chars (with extended recovery)
+      const hexMatch = trimmed.match(/0x[a-fA-F0-9]{128}([a-fA-F0-9]{2,4})?/)
+      if (hexMatch) {
+        const matched = hexMatch[0]
+        // Verify it's exactly 130 or 132 chars
+        if (matched.length === 130 || matched.length === 132) {
+          console.log('Found hex signature pattern in long string:', matched.substring(0, 20) + '...')
+          return matched
+        }
+      }
+      
+      // Last resort: if it's just a very long hex string, it's probably not a signature
+      // Don't return invalid data
+      return null
     }
     
-    // Still return it normalized (some wallets might have weird formats)
-    return trimmed.startsWith('0x') ? trimmed : '0x' + trimmed
+    // For medium-length strings (between 134 and 200), might be a signature without proper formatting
+    // Don't return anything that's not a valid signature length
+    return null
   }
 
   // If it's an object, try to extract signature fields
@@ -298,10 +321,24 @@ export function DepositSourceManager({ onSourceAdded, onSourceRemoved }: Deposit
           type: rawSigType,
           length: rawSigLength,
           preview: typeof signature === 'string' 
-            ? signature.substring(0, 100) + '...' 
-            : JSON.stringify(signature).substring(0, 100) + '...',
-          isObject: typeof signature === 'object'
+            ? signature.substring(0, 200) + '...' 
+            : JSON.stringify(signature).substring(0, 200) + '...',
+          isObject: typeof signature === 'object',
+          fullStructure: typeof signature === 'object' ? signature : undefined
         })
+        
+        // If it's a long string, also log if it looks like JSON
+        if (typeof signature === 'string' && signature.length > 200) {
+          try {
+            const parsed = JSON.parse(signature)
+            console.log('Long string parsed as JSON:', {
+              keys: Object.keys(parsed),
+              structure: parsed
+            })
+          } catch {
+            console.log('Long string is not valid JSON')
+          }
+        }
         
         // Extract actual signature from wallet response
         const extractedSignature = extractSignature(signature)

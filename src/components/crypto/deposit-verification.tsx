@@ -147,11 +147,24 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
             <span>Verify Deposit</span>
           </DialogTitle>
           <DialogDescription>
-            If your deposit isn't showing up in your wallet, you can verify it using the transaction hash.
+            Advanced verification for dispute resolution and manual processing when Circle webhooks fail.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Info Banner */}
+          <div className="flex items-start space-x-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-yellow-900 mb-1">
+                Fallback Verification Method
+              </p>
+              <p className="text-sm text-yellow-800">
+                Circle automatically processes deposits via webhooks. Only use this tool if your deposit wasn't automatically credited after 10+ minutes, or for dispute resolution.
+              </p>
+            </div>
+          </div>
+
           {/* Input Form */}
           <div className="space-y-4">
             <div className="space-y-2">
@@ -171,7 +184,7 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
             <div className="flex items-center space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <Info className="h-4 w-4 text-blue-600" />
               <p className="text-sm text-blue-800">
-                This will check if your deposit was processed and credit it to your account if it was missed.
+                This will manually verify and process the deposit if Circle webhooks failed to process it automatically.
               </p>
             </div>
 

@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useAuthStore } from '@/lib/store'
+import { cryptoService, CircleWallet } from '@/lib/crypto-service'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,12 +17,16 @@ import {
   Search,
   X,
   ArrowUpRight,
-  ArrowDownLeft
+  ArrowDownLeft,
+  Copy,
+  Check,
+  ExternalLink,
+  Shield
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { CryptoDepositModal } from './crypto-deposit-modal'
 import { CryptoWithdrawalModal } from './crypto-withdrawal-modal'
 import { DepositVerification } from './deposit-verification'
-import { DepositSourceManager } from './deposit-source-manager'
 import { PendingDepositsNotification } from './pending-deposits-notification'
 import { ManualDepositVerification } from './manual-deposit-verification'
 
@@ -39,6 +45,83 @@ export function CryptoManagementModal({
 }: CryptoManagementModalProps) {
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false)
   const [isWithdrawalModalOpen, setIsWithdrawalModalOpen] = useState(false)
+  const [circleWallet, setCircleWallet] = useState<CircleWallet | null>(null)
+  const [isLoadingWallet, setIsLoadingWallet] = useState(false)
+  const [copiedAddress, setCopiedAddress] = useState(false)
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
+  const { user } = useAuthStore()
+
+  useEffect(() => {
+    if (isOpen && user?.id) {
+      fetchCircleWallet()
+    }
+  }, [isOpen, user?.id])
+
+  useEffect(() => {
+    if (circleWallet?.address) {
+      generateQRCode(circleWallet.address)
+    }
+  }, [circleWallet?.address])
+
+  const fetchCircleWallet = async () => {
+    if (!user?.id) return
+    
+    try {
+      setIsLoadingWallet(true)
+      const wallet = await cryptoService.getOrCreateCircleWallet()
+      setCircleWallet(wallet)
+    } catch (error) {
+      console.error('Error fetching Circle wallet:', error)
+      toast.error('Failed to load wallet information')
+    } finally {
+      setIsLoadingWallet(false)
+    }
+  }
+
+  const generateQRCode = async (address: string) => {
+    try {
+      const qrcode = await import('qrcode')
+      const dataUrl = await qrcode.toDataURL(address, {
+        width: 200,
+        margin: 2
+      })
+      setQrCodeUrl(dataUrl)
+    } catch (error) {
+      console.error('Error generating QR code:', error)
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedAddress(true)
+      setTimeout(() => setCopiedAddress(false), 2000)
+      toast.success('Copied to clipboard')
+    } catch (error) {
+      toast.error('Failed to copy to clipboard')
+    }
+  }
+
+  const getNetworkName = () => {
+    if (!circleWallet) return 'Unknown'
+    if (circleWallet.blockchain === 'MATIC-AMOY') return 'Polygon Amoy (Testnet)'
+    if (circleWallet.blockchain === 'MATIC') return 'Polygon Mainnet'
+    return circleWallet.blockchain
+  }
+
+  const getNetworkColor = () => {
+    if (!circleWallet) return 'bg-gray-100 text-gray-800'
+    if (circleWallet.blockchain === 'MATIC-AMOY') return 'bg-yellow-100 text-yellow-800'
+    return 'bg-green-100 text-green-800'
+  }
+
+  const getBlockchainExplorerUrl = (address: string) => {
+    if (!circleWallet) return '#'
+    if (circleWallet.blockchain === 'MATIC-AMOY' || circleWallet.blockchain === 'MATIC') {
+      return `https://polygonscan.com/address/${address}`
+    }
+    return `https://polygonscan.com/address/${address}`
+  }
 
   const handleDepositClick = () => {
     setIsDepositModalOpen(true)
@@ -100,33 +183,122 @@ export function CryptoManagementModal({
             </div>
 
             {/* Tabs for different crypto functions */}
-            <Tabs defaultValue="sources" className="w-full">
+            <Tabs defaultValue="wallet" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="sources">Deposit Sources</TabsTrigger>
+                <TabsTrigger value="wallet">Circle Wallet</TabsTrigger>
                 <TabsTrigger value="verify">Verify Deposit</TabsTrigger>
                 <TabsTrigger value="info">Network Info</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="sources" className="space-y-4">
+              <TabsContent value="wallet" className="space-y-4">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <Wallet className="h-5 w-5" />
-                      <span>Deposit Sources</span>
+                      <span>Your Circle Wallet</span>
                     </CardTitle>
                     <CardDescription>
-                      Manage your crypto addresses for deposit attribution
+                      Your personal deposit address managed securely by Circle
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <DepositSourceManager 
-                      onSourceAdded={() => {
-                        // Could refresh data if needed
-                      }}
-                      onSourceRemoved={() => {
-                        // Could refresh data if needed
-                      }}
-                    />
+                  <CardContent className="space-y-4">
+                    {isLoadingWallet ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      </div>
+                    ) : circleWallet ? (
+                      <>
+                        {/* Wallet Status */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <span className="text-sm font-medium text-gray-600">Status</span>
+                            <div>
+                              <Badge className={circleWallet.state === 'LIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                                {circleWallet.state}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <span className="text-sm font-medium text-gray-600">Network</span>
+                            <div>
+                              <Badge className={getNetworkColor()}>
+                                {getNetworkName()}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Separator />
+
+                        {/* Wallet Address */}
+                        <div className="space-y-2">
+                          <span className="text-sm font-medium text-gray-600">Deposit Address</span>
+                          <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div className="font-mono text-sm break-all flex-1 mr-2">
+                                {circleWallet.address}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(circleWallet.address)}
+                              >
+                                {copiedAddress ? (
+                                  <Check className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* QR Code */}
+                        {qrCodeUrl && (
+                          <div className="space-y-2">
+                            <span className="text-sm font-medium text-gray-600">QR Code</span>
+                            <div className="flex justify-center p-4 bg-white border border-gray-200 rounded-lg">
+                              <img 
+                                src={qrCodeUrl} 
+                                alt="Wallet QR Code" 
+                                className="w-48 h-48"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Explorer Link */}
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(getBlockchainExplorerUrl(circleWallet.address), '_blank')}
+                          >
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            View on Explorer
+                          </Button>
+                        </div>
+
+                        <Separator />
+
+                        {/* Circle Wallet Info */}
+                        <div className="space-y-2">
+                          <div className="flex items-start space-x-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-blue-900">Circle-Managed Wallet</p>
+                              <p className="text-sm text-blue-700 mt-1">
+                                Circle securely manages your wallet private keys. Send USDC to this address and deposits will be processed automatically via Circle webhooks.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        Failed to load wallet information
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -139,7 +311,7 @@ export function CryptoManagementModal({
                       <span>Verify Deposit</span>
                     </CardTitle>
                     <CardDescription>
-                      Verify a deposit using transaction hash if it wasn't automatically detected
+                      Manual verification fallback if Circle webhooks fail to process your deposit automatically
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -154,7 +326,7 @@ export function CryptoManagementModal({
                       <span>Dispute Resolution</span>
                     </CardTitle>
                     <CardDescription>
-                      Advanced verification for dispute resolution
+                      Advanced verification for dispute resolution and manual processing
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

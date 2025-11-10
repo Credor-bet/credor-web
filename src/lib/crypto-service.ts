@@ -152,6 +152,43 @@ export interface ApiError {
   detail?: string
 }
 
+// Circle wallet interfaces
+export interface CircleWallet {
+  wallet_id: string
+  address: string
+  blockchain: string
+  state: string
+  is_new: boolean
+  qr_code_data?: string
+}
+
+export interface CircleBalance {
+  user_id: string
+  circle_wallet_id: string
+  address: string
+  balances: Array<{
+    token_id: string
+    token_address: string
+    amount: string
+    currency: string
+  }>
+}
+
+export interface CircleDeposit {
+  id: string
+  circle_tx_id: string
+  circle_tx_type: 'INBOUND' | 'OUTBOUND'
+  state: 'INITIATED' | 'QUEUED' | 'CLEARED' | 'SENT' | 'STUCK' | 'CONFIRMED' | 'COMPLETE' | 'CANCELLED' | 'FAILED' | 'DENIED'
+  tx_hash?: string
+  amount_usd: number
+  created_at: string
+  transactions?: {
+    id: string
+    status: string
+    amount: string
+  }
+}
+
 class CryptoService {
   private baseUrl: string
   private authToken: string | null = null
@@ -186,7 +223,20 @@ class CryptoService {
     }
 
     // Add auth token for protected endpoints
-    if (!endpoint.includes('/pool-info') && !endpoint.includes('/estimate-fee') && !endpoint.includes('/withdrawals/') && !endpoint.includes('/health')) {
+    // Exclude public endpoints that don't require authentication
+    const publicEndpoints = [
+      '/pool-info',
+      '/pool-wallet/info',
+      '/estimate-fee',
+      '/health'
+    ]
+    
+    // Check if endpoint matches public endpoints pattern
+    const isPublicEndpoint = publicEndpoints.some(publicPath => endpoint.includes(publicPath)) ||
+      // Allow GET /withdrawals/{transaction_id} without auth (public status check)
+      endpoint.match(/^\/api\/v1\/withdrawals\/[a-f0-9-]+$/)
+    
+    if (!isPublicEndpoint) {
       try {
         const token = await this.getAuthToken()
         defaultHeaders['Authorization'] = `Bearer ${token}`
@@ -247,6 +297,9 @@ class CryptoService {
   }
 
   // Public endpoints (no auth required)
+  /**
+   * @deprecated Use getOrCreateCircleWallet() instead. Pooled wallet is deprecated in favor of Circle wallets.
+   */
   async getPublicPoolInfo(): Promise<PublicPoolInfo> {
     return this.makeRequest<PublicPoolInfo>('/api/v1/pool-wallet/info')
   }
@@ -267,7 +320,33 @@ class CryptoService {
     return this.makeRequest('/api/v1/health')
   }
 
+  // Circle wallet endpoints (require auth)
+  async getOrCreateCircleWallet(): Promise<CircleWallet> {
+    return this.makeRequest<CircleWallet>('/api/v1/circle/wallet', {
+      method: 'POST'
+    })
+  }
+
+  async getCircleWallet(userId: string): Promise<CircleWallet> {
+    return this.makeRequest<CircleWallet>(`/api/v1/circle/wallet/${userId}`)
+  }
+
+  async getCircleWalletBalance(userId: string): Promise<CircleBalance> {
+    return this.makeRequest<CircleBalance>(`/api/v1/circle/balance/${userId}`)
+  }
+
+  async getCircleDeposits(userId: string, limit: number = 50, offset: number = 0): Promise<CircleDeposit[]> {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString()
+    })
+    return this.makeRequest<CircleDeposit[]>(`/api/v1/circle/deposits/${userId}?${params}`)
+  }
+
   // Protected endpoints (require auth)
+  /**
+   * @deprecated Deposit sources are deprecated in favor of Circle wallets. Use getOrCreateCircleWallet() instead.
+   */
   async createDepositSource(userId: string, fromAddress: string): Promise<DepositSource> {
     return this.makeRequest<DepositSource>('/api/v1/deposit-sources', {
       method: 'POST',
@@ -278,10 +357,16 @@ class CryptoService {
     })
   }
 
+  /**
+   * @deprecated Deposit sources are deprecated in favor of Circle wallets.
+   */
   async getDepositSources(userId: string): Promise<DepositSource[]> {
     return this.makeRequest<DepositSource[]>(`/api/v1/deposit-sources/${userId}`)
   }
 
+  /**
+   * @deprecated Deposit sources are deprecated in favor of Circle wallets.
+   */
   async deleteDepositSource(sourceId: string): Promise<{ message: string }> {
     return this.makeRequest<{ message: string }>(`/api/v1/deposit-sources/${sourceId}`, {
       method: 'DELETE'
@@ -322,7 +407,10 @@ class CryptoService {
     return this.makeRequest<DepositHistory[]>(`/api/v1/deposits/${userId}`)
   }
 
-  // Address verification endpoints
+  // Address verification endpoints (deprecated)
+  /**
+   * @deprecated Address verification is deprecated in favor of Circle wallets. Circle handles wallet management automatically.
+   */
   async requestVerificationChallenge(request: VerificationChallengeRequest): Promise<VerificationChallengeResponse> {
     return this.makeRequest<VerificationChallengeResponse>('/api/v1/deposit-sources/request-verification', {
       method: 'POST',
@@ -330,6 +418,9 @@ class CryptoService {
     })
   }
 
+  /**
+   * @deprecated Address verification is deprecated in favor of Circle wallets.
+   */
   async confirmVerification(request: VerificationConfirmRequest): Promise<VerificationConfirmResponse> {
     return this.makeRequest<VerificationConfirmResponse>('/api/v1/deposit-sources/confirm-verification', {
       method: 'POST',
@@ -337,6 +428,9 @@ class CryptoService {
     })
   }
 
+  /**
+   * @deprecated Address verification is deprecated in favor of Circle wallets.
+   */
   async getPendingChallenges(userId: string): Promise<PendingChallenge[]> {
     return this.makeRequest<PendingChallenge[]>(`/api/v1/deposit-sources/challenges/${userId}`)
   }

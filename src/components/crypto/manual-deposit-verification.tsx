@@ -76,8 +76,11 @@ export function ManualDepositVerification({ onDepositVerified }: ManualDepositVe
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             Manual Deposit Verification
           </h3>
-          <p className="text-sm text-gray-600">
-            If your deposit wasn't automatically detected, enter your transaction hash below.
+          <p className="text-sm text-gray-600 mb-2">
+            Circle automatically processes deposits to your wallet address. Use this tool only if Circle webhooks fail to process your deposit automatically.
+          </p>
+          <p className="text-sm text-gray-500">
+            Enter your transaction hash below to manually verify and process the deposit.
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore, useBettingStore } from '@/lib/store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ import Link from 'next/link'
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
   const { user, wallet, refreshUser, refreshWallet } = useAuthStore()
   
   // Defensive Zustand store access
@@ -118,6 +120,15 @@ export default function DashboardPage() {
       loadDashboardData()
     }
   }, [user?.id, loadDashboardData])
+
+  // Client-side profile completion check (UX improvement, not security)
+  useEffect(() => {
+    if (user && !user.is_profile_complete) {
+      // Redirect to profile completion if profile is incomplete
+      // This is a UX check, middleware allows access but we redirect for better UX
+      router.push('/profile-completion')
+    }
+  }, [user, router])
 
   // Retry loading wallet and bets when user becomes available (only once)
   useEffect(() => {

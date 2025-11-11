@@ -85,25 +85,30 @@ export interface WithdrawalRequest {
   user_id: string
   amount: number
   to_address: string
-  idempotency_key: string
+  client_request_id?: string // Optional for retry idempotency
 }
 
 export interface WithdrawalResponse {
   id: string
   user_id: string
-  amount: number
+  amount: string // API returns as string
   to_address: string
   transaction_hash?: string
   status: 'pending' | 'completed' | 'failed'
+  metadata?: {
+    circle_tx_id?: string
+    circle_state?: string
+    withdrawal_stage?: string
+  }
   created_at: string
   updated_at?: string
 }
 
 export interface WithdrawalEstimate {
-  gas_estimate: number
-  gas_price_gwei: number
-  total_cost_eth: number
-  network: string
+  gas_estimate?: number
+  gas_price_gwei?: number
+  total_cost_eth?: number
+  network?: string
 }
 
 export interface DepositVerificationRequest {
@@ -124,6 +129,8 @@ export interface UserBalance {
   id: string
   user_id: string
   balance: number
+  locked_balance: number
+  currency: string
   created_at: string
   updated_at: string
 }
@@ -140,11 +147,18 @@ export interface DepositHistory {
 export interface WithdrawalHistory {
   id: string
   user_id: string
-  amount: number
+  amount: string // API returns as string
   to_address: string
   transaction_hash?: string
   status: 'pending' | 'completed' | 'failed'
   created_at: string
+}
+
+export interface WithdrawalHistoryResponse {
+  items: WithdrawalHistory[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export interface ApiError {
@@ -194,7 +208,7 @@ class CryptoService {
   private authToken: string | null = null
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://0bc5724857cc.ngrok-free.app'
+    this.baseUrl = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://6003c8ecd0a2.ngrok-free.app'
   }
 
   private async getAuthToken(): Promise<string> {
@@ -227,7 +241,6 @@ class CryptoService {
     const publicEndpoints = [
       '/pool-info',
       '/pool-wallet/info',
-      '/estimate-fee',
       '/health'
     ]
     
@@ -382,14 +395,30 @@ class CryptoService {
 
   async getUserWithdrawalHistory(
     userId: string, 
-    limit: number = 50, 
-    offset: number = 0
-  ): Promise<WithdrawalHistory[]> {
+    options: {
+      limit?: number
+      offset?: number
+      status?: string
+      start_date?: string
+      end_date?: string
+    } = {}
+  ): Promise<WithdrawalHistoryResponse> {
     const params = new URLSearchParams({
-      limit: limit.toString(),
-      offset: offset.toString()
+      limit: (options.limit || 50).toString(),
+      offset: (options.offset || 0).toString()
     })
-    return this.makeRequest<WithdrawalHistory[]>(`/api/v1/withdrawals/user/${userId}?${params}`)
+    
+    if (options.status) {
+      params.append('status', options.status)
+    }
+    if (options.start_date) {
+      params.append('start_date', options.start_date)
+    }
+    if (options.end_date) {
+      params.append('end_date', options.end_date)
+    }
+    
+    return this.makeRequest<WithdrawalHistoryResponse>(`/api/v1/withdrawals/user/${userId}?${params}`)
   }
 
   async verifyDeposit(request: DepositVerificationRequest): Promise<DepositVerificationResponse> {
@@ -449,7 +478,7 @@ class CryptoService {
     return /^0x[a-fA-F0-9]{40}$/.test(address)
   }
 
-  generateIdempotencyKey(): string {
+  generateClientRequestId(): string {
     return `withdrawal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   }
 

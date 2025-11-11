@@ -33,29 +33,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profileFetchRef.current.add(userId)
     
     try {
-      // First try to find by user ID (primary key)
-      const { data: profile, error } = await supabase
+      // Get user email from session for fallback query
+      const { data: { user } } = await supabase.auth.getUser()
+      const userEmail = user?.email
+
+      // Try to find by user ID first (primary key, fastest)
+      const { data: profileById, error: idError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .maybeSingle()
       
-      if (error) {
-        devError('Auth provider: Error fetching profile by ID:', error)
-        return null
+      if (idError) {
+        devError('Auth provider: Error fetching profile by ID:', idError)
       }
       
-      if (profile) {
-        return profile
+      if (profileById) {
+        return profileById
       }
-      
-      // If not found by ID, try to find by email (in case of auth sync issues)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user?.email) {
+
+      // If not found by ID and we have email, try by email (single query with OR would be less efficient here)
+      // since ID lookup is indexed and faster, we prefer it
+      if (userEmail) {
         const { data: profileByEmail, error: emailError } = await supabase
           .from('users')
           .select('*')
-          .eq('email', user.email)
+          .eq('email', userEmail)
           .maybeSingle()
         
         if (emailError) {

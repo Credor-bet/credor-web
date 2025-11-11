@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { cryptoService, CircleWallet } from '@/lib/crypto-service'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,6 +18,7 @@ import {
   Wallet
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { DepositMonitor } from './deposit-monitor'
 
 interface CryptoDepositModalProps {
   isOpen: boolean
@@ -37,11 +38,33 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
     }
   }, [isOpen])
 
-  useEffect(() => {
-    if (wallet?.address) {
-      generateQRCode(wallet.address)
+  const generateQRCode = useCallback(async (address: string) => {
+    try {
+      // Use qrcode package to generate QR code
+      const qrcode = await import('qrcode')
+      const dataUrl = await qrcode.toDataURL(address, {
+        width: 200,
+        margin: 2
+      })
+      setQrCodeUrl(dataUrl)
+    } catch (error) {
+      console.error('Error generating QR code:', error)
+      // If QR code generation fails, we'll just not show it
     }
-  }, [wallet?.address])
+  }, [])
+
+  useEffect(() => {
+    if (wallet) {
+      // Use qr_code_data from API if available, otherwise generate from address
+      if (wallet.qr_code_data) {
+        // If API provides QR code data URL, use it directly
+        setQrCodeUrl(wallet.qr_code_data)
+      } else if (wallet.address) {
+        // Fallback: generate QR code from address
+        generateQRCode(wallet.address)
+      }
+    }
+  }, [wallet, generateQRCode])
 
   const fetchCircleWallet = async () => {
     try {
@@ -57,21 +80,6 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
       toast.error('Failed to load wallet information')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const generateQRCode = async (address: string) => {
-    try {
-      // Use qrcode package to generate QR code
-      const qrcode = await import('qrcode')
-      const dataUrl = await qrcode.toDataURL(address, {
-        width: 200,
-        margin: 2
-      })
-      setQrCodeUrl(dataUrl)
-    } catch (error) {
-      console.error('Error generating QR code:', error)
-      // If QR code generation fails, we'll just not show it
     }
   }
 
@@ -111,7 +119,12 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
 
   const handleDepositInitiated = () => {
     onDepositInitiated?.()
-    onClose()
+    // Don't close - let user see the deposit monitor
+  }
+
+  const handleDepositComplete = (deposit: any) => {
+    toast.success(`Deposit of $${deposit.amount_usd.toFixed(2)} USDC completed!`)
+    onDepositInitiated?.()
   }
 
   if (isLoading) {
@@ -299,6 +312,9 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
               </div>
             </CardContent>
           </Card>
+
+          {/* Deposit Monitor */}
+          <DepositMonitor onDepositComplete={handleDepositComplete} />
 
           {/* Processing Time */}
           <Card>

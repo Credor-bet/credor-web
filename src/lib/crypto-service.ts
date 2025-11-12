@@ -422,7 +422,7 @@ class CryptoService {
   }
 
   async verifyDeposit(request: DepositVerificationRequest): Promise<DepositVerificationResponse> {
-    return this.makeRequest<DepositVerificationResponse>('/api/v1/deposit/verify', {
+    return this.makeRequest<DepositVerificationResponse>('/api/v1/circle/deposits/verify', {
       method: 'POST',
       body: JSON.stringify(request)
     })

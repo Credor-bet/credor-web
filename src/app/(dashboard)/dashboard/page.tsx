@@ -130,6 +130,29 @@ export default function DashboardPage() {
     }
   }, [user, router])
 
+  // Check if user has sport preferences
+  useEffect(() => {
+    const checkSportPreferences = async () => {
+      if (!user?.id || !user.is_profile_complete) return
+
+      try {
+        const { sportsService } = await import('@/lib/supabase/sports')
+        const hasExplicit = await sportsService.hasExplicitPreferences()
+        
+        // If user has no explicit preferences (no false values), they likely only have defaults
+        // Redirect to sport selection to let them make explicit choices
+        if (!hasExplicit) {
+          router.push('/sport-selection')
+        }
+      } catch (error) {
+        // On error, allow access (better UX than blocking)
+        console.error('Error checking sport preferences:', error)
+      }
+    }
+
+    checkSportPreferences()
+  }, [user, router])
+
   // Retry loading wallet and bets when user becomes available (only once)
   useEffect(() => {
     if (user?.id && !wallet && !isLoading && !dataLoadRef.current) {

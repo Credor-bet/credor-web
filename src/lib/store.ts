@@ -8,16 +8,23 @@ interface User {
   email: string
   full_name: string | null
   avatar_url: string | null
+  phone_number: string | null
+  date_of_birth: string | null
   country: string | null
   preferred_currency: string
-  is_profile_complete: boolean
   total_wagered: number
-  total_won: number
-  total_lost: number
   total_bets: number
   total_wins: number
   total_losses: number
+  total_draws: number
   win_rate: number
+  status: string
+  is_email_verified: boolean
+  is_phone_verified: boolean
+  last_login: string | null
+  created_at: string
+  updated_at: string
+  is_profile_complete: boolean
 }
 
 interface Wallet {

@@ -128,7 +128,7 @@ export default function ProfileCompletionPage() {
       await refreshUser()
       
       toast.success('Profile completed successfully!')
-      router.push('/dashboard')
+      router.push('/sport-selection')
     } catch (error) {
       console.error('Error updating profile:', error)
       toast.error('Failed to complete profile. Please try again.')

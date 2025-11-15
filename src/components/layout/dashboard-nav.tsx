@@ -16,8 +16,8 @@ import {
   LogOut, 
   Menu, 
   X,
-  Trophy
-  // TrendingUp // Removed unused import
+  Trophy,
+  Settings
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +27,7 @@ const navigation = [
   { name: 'History', href: '/history', icon: History },
   { name: 'Wallet', href: '/dashboard/wallet', icon: Wallet },
   { name: 'Friends', href: '/dashboard/friends', icon: Users },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
 
 export function DashboardNav() {

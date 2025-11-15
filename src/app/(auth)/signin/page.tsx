@@ -26,61 +26,22 @@ export default function SignInPage() {
     setError('')
 
     try {
-      console.log('Attempting sign in with:', identifier)
       const result = await signInWithUsernameOrEmail(identifier, password)
-      console.log('Sign in result:', result)
 
       if (!result.success) {
         if (result.needsConfirmation) {
           // User needs to confirm their email
           setError('Please confirm your email address before signing in.')
-          // Redirect to confirmation page with the email
-          setTimeout(() => {
-            console.log('Redirecting to confirm-email with email:', result.email)
-            router.push(`/confirm-email?email=${encodeURIComponent(result.email || '')}`)
-          }, 2000)
+          // Redirect to confirmation page - middleware will handle routing
+          router.push(`/confirm-email?email=${encodeURIComponent(result.email || '')}`)
         } else {
           setError(result.error || 'Sign in failed')
+          setIsLoading(false)
         }
-        setIsLoading(false)
       } else {
-        // Successful sign in - check if email is confirmed
-        console.log('Sign in successful, checking email confirmation')
-        
-        // Add a small delay to allow auth provider to sync database
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // Check email confirmation status in the database
-        try {
-          const { data: { session } } = await supabase.auth.getSession()
-          const { data: profile } = await supabase
-            .from('users')
-            .select('is_email_verified')
-            .eq('id', session?.user?.id)
-            .maybeSingle()
-          
-          console.log('Sign-in page: Database email verification status:', profile?.is_email_verified)
-          
-          if (profile && !profile.is_email_verified) {
-            console.log('Email not confirmed in database, redirecting to confirm-email')
-            setError('Please confirm your email address before continuing.')
-            setTimeout(() => {
-              router.push(`/confirm-email?email=${encodeURIComponent(session?.user?.email || '')}`)
-            }, 2000)
-          } else {
-            console.log('Email confirmed in database, redirecting to dashboard')
-            // Add a small delay to ensure session is properly established
-            setTimeout(() => {
-              router.push('/dashboard')
-            }, 100)
-          }
-        } catch (error) {
-          console.error('Error checking email verification status:', error)
-          // Fallback to dashboard
-          setTimeout(() => {
-            router.push('/dashboard')
-          }, 100)
-        }
+        // Successful sign in - redirect to dashboard
+        // Middleware will handle email verification checks and routing
+        router.push('/dashboard')
       }
     } catch (error) {
       console.error('Sign in error:', error)

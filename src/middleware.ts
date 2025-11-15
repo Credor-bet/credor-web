@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
-  console.log('🚀 MIDDLEWARE IS RUNNING for path:', req.nextUrl.pathname)
+  // Only log in development to avoid performance impact
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Middleware: Processing', req.nextUrl.pathname)
+  }
   
   let supabaseResponse = NextResponse.next({
     request: req
@@ -33,87 +36,51 @@ export async function middleware(req: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const { pathname } = req.nextUrl
 
-  console.log('=== MIDDLEWARE DEBUG ===')
-  console.log('Pathname:', pathname)
-  console.log('Session exists:', !!session)
-  console.log('Session user:', session?.user?.email)
-  console.log('Email confirmed:', !!session?.user?.email_confirmed_at)
-
   // Define route types
   const authRoutes = ['/signin', '/signup']
-  const protectedRoutes = ['/dashboard', '/profile-completion']
+  const protectedRoutes = ['/dashboard']
 
   // If no session, only allow public routes
   if (!session) {
     if (protectedRoutes.some(route => pathname.startsWith(route))) {
-      console.log('Middleware: No session, redirecting to /signin')
       return NextResponse.redirect(new URL('/signin', req.url))
     }
-    console.log('Middleware: No session, allowing public route')
     return supabaseResponse
   }
 
-  // User has session - check email confirmation and profile completion
+  // User has session - check email confirmation using session data (source of truth)
   if (session.user) {
-    try {
-      // Check user profile in database for email confirmation status
-      const { data: profile } = await supabase
-        .from('users')
-        .select('is_email_verified, is_profile_complete')
-        .eq('id', session.user.id)
-        .maybeSingle()
+    const emailConfirmed = !!session.user.email_confirmed_at
+    const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
+    const isConfirmEmailRoute = pathname.startsWith('/confirm-email')
+    const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
-      console.log('Middleware: Profile data:', profile)
-
-      // Check if email is confirmed using database field
-      if (!profile?.is_email_verified) {
-        // If on confirm-email page, allow access
-        if (pathname.startsWith('/confirm-email')) {
-          console.log('Middleware: Email not confirmed, allowing confirm-email page')
-          return supabaseResponse
-        }
-        // If on auth pages, allow access
-        if (authRoutes.some(route => pathname.startsWith(route))) {
-          console.log('Middleware: Email not confirmed, allowing auth page access')
-          return supabaseResponse
-        }
-        // Otherwise redirect to email confirmation
-        console.log('Middleware: Email not confirmed, redirecting to /confirm-email')
+    // Email verification check (SECURITY CHECK - using session data, not database)
+    if (!emailConfirmed) {
+      // Allow access to confirm-email and auth pages
+      if (isConfirmEmailRoute || isAuthRoute) {
+        return supabaseResponse
+      }
+      // Redirect to email confirmation for protected routes
+      if (isProtectedRoute) {
         return NextResponse.redirect(new URL(`/confirm-email?email=${encodeURIComponent(session.user.email || '')}`, req.url))
       }
-
-      // Email is confirmed - check profile completion
-      console.log('Middleware: Profile completion status:', profile?.is_profile_complete)
-
-      if (!profile?.is_profile_complete) {
-        // If on profile-completion page, allow access
-        if (pathname.startsWith('/profile-completion')) {
-          console.log('Middleware: Profile incomplete, allowing profile-completion page')
-          return supabaseResponse
-        }
-        // Otherwise redirect to profile completion
-        console.log('Middleware: Profile incomplete, redirecting to /profile-completion')
-        return NextResponse.redirect(new URL('/profile-completion', req.url))
-      }
-
-      // Profile is complete - if on auth pages or profile-completion, redirect to dashboard
-      if (authRoutes.some(route => pathname.startsWith(route)) || pathname.startsWith('/profile-completion')) {
-        console.log('Middleware: Profile complete, redirecting to /dashboard')
-        return NextResponse.redirect(new URL('/dashboard', req.url))
-      }
-
-      // Allow access to protected routes
-      console.log('Middleware: Session and profile complete, allowing access')
-      return supabaseResponse
-    } catch (error) {
-      console.error('Middleware: Error checking profile:', error)
-      // On error, allow the request to continue
+      // Allow other public routes
       return supabaseResponse
     }
+
+    // Email is confirmed - handle routing
+    // Note: Profile completion is handled client-side (not a security check)
+    // If user is on auth pages after login, redirect to dashboard
+    if (isAuthRoute) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
+    // Allow access to all routes for authenticated, email-verified users
+    return supabaseResponse
   }
 
-  console.log('Middleware: Allowing request to continue');
-  return supabaseResponse;
+  return supabaseResponse
 }
 
 export const config = {

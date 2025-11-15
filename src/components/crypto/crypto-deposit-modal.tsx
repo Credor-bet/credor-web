@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { cryptoService, PublicPoolInfo } from '@/lib/crypto-service'
+import { useState, useEffect, useCallback } from 'react'
+import { cryptoService, CircleWallet } from '@/lib/crypto-service'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,9 +14,11 @@ import {
   Info,
   Clock,
   Shield,
-  Coins
+  Coins,
+  Wallet
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { DepositMonitor } from './deposit-monitor'
 
 interface CryptoDepositModalProps {
   isOpen: boolean
@@ -25,40 +27,67 @@ interface CryptoDepositModalProps {
 }
 
 export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: CryptoDepositModalProps) {
-  const [poolInfo, setPoolInfo] = useState<PublicPoolInfo | null>(null)
+  const [wallet, setWallet] = useState<CircleWallet | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [copiedAddress, setCopiedAddress] = useState(false)
-  const [copiedContract, setCopiedContract] = useState(false)
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen) {
-      fetchPoolInfo()
+      fetchCircleWallet()
     }
   }, [isOpen])
 
-  const fetchPoolInfo = async () => {
+  const generateQRCode = useCallback(async (address: string) => {
+    try {
+      // Use qrcode package to generate QR code
+      const qrcode = await import('qrcode')
+      const dataUrl = await qrcode.toDataURL(address, {
+        width: 200,
+        margin: 2
+      })
+      setQrCodeUrl(dataUrl)
+    } catch (error) {
+      console.error('Error generating QR code:', error)
+      // If QR code generation fails, we'll just not show it
+    }
+  }, [])
+
+  useEffect(() => {
+    if (wallet) {
+      // Use qr_code_data from API if available, otherwise generate from address
+      if (wallet.qr_code_data) {
+        // If API provides QR code data URL, use it directly
+        setQrCodeUrl(wallet.qr_code_data)
+      } else if (wallet.address) {
+        // Fallback: generate QR code from address
+        generateQRCode(wallet.address)
+      }
+    }
+  }, [wallet, generateQRCode])
+
+  const fetchCircleWallet = async () => {
     try {
       setIsLoading(true)
-      const info = await cryptoService.getPublicPoolInfo()
-      setPoolInfo(info)
+      const walletData = await cryptoService.getOrCreateCircleWallet()
+      setWallet(walletData)
+      
+      if (walletData.is_new) {
+        toast.success('Your Circle wallet has been created!')
+      }
     } catch (error) {
-      console.error('Error fetching pool info:', error)
-      toast.error('Failed to load deposit information')
+      console.error('Error fetching Circle wallet:', error)
+      toast.error('Failed to load wallet information')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const copyToClipboard = async (text: string, type: 'address' | 'contract') => {
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      if (type === 'address') {
-        setCopiedAddress(true)
-        setTimeout(() => setCopiedAddress(false), 2000)
-      } else {
-        setCopiedContract(true)
-        setTimeout(() => setCopiedContract(false), 2000)
-      }
+      setCopiedAddress(true)
+      setTimeout(() => setCopiedAddress(false), 2000)
       toast.success('Copied to clipboard')
     } catch (error) {
       toast.error('Failed to copy to clipboard')
@@ -66,18 +95,36 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
   }
 
   const getNetworkName = () => {
-    if (!poolInfo) return 'Unknown'
-    return poolInfo.is_testnet ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet'
+    if (!wallet) return 'Unknown'
+    // Circle blockchain format: MATIC-AMOY, MATIC, ETH, etc.
+    if (wallet.blockchain === 'MATIC-AMOY') return 'Polygon Amoy (Testnet)'
+    if (wallet.blockchain === 'MATIC') return 'Polygon Mainnet'
+    return wallet.blockchain
   }
 
   const getNetworkColor = () => {
-    if (!poolInfo) return 'bg-gray-100 text-gray-800'
-    return poolInfo.is_testnet ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+    if (!wallet) return 'bg-gray-100 text-gray-800'
+    if (wallet.blockchain === 'MATIC-AMOY') return 'bg-yellow-100 text-yellow-800'
+    return 'bg-green-100 text-green-800'
+  }
+
+  const getBlockchainExplorerUrl = (address: string) => {
+    if (!wallet) return '#'
+    if (wallet.blockchain === 'MATIC-AMOY' || wallet.blockchain === 'MATIC') {
+      return `https://polygonscan.com/address/${address}`
+    }
+    // Default to polygonscan for now
+    return `https://polygonscan.com/address/${address}`
   }
 
   const handleDepositInitiated = () => {
     onDepositInitiated?.()
-    onClose()
+    // Don't close - let user see the deposit monitor
+  }
+
+  const handleDepositComplete = (deposit: any) => {
+    toast.success(`Deposit of $${deposit.amount_usd.toFixed(2)} USDC completed!`)
+    onDepositInitiated?.()
   }
 
   if (isLoading) {
@@ -98,19 +145,19 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
     )
   }
 
-  if (!poolInfo) {
+  if (!wallet) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>USDC Deposit Instructions</DialogTitle>
             <DialogDescription>
-              Failed to load deposit information
+              Failed to load wallet information
             </DialogDescription>
           </DialogHeader>
           <div className="text-center py-8">
             <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-            <p className="text-gray-600">Unable to load deposit information. Please try again later.</p>
+            <p className="text-gray-600">Unable to load wallet information. Please try again later.</p>
             <Button onClick={onClose} className="mt-4">
               Close
             </Button>
@@ -129,29 +176,51 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
             <span>USDC Deposit Instructions</span>
           </DialogTitle>
           <DialogDescription>
-            Follow these steps to deposit USDC to your wallet
+            Send USDC to your personal Circle wallet address
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Network Information */}
+          {/* New Wallet Created Message */}
+          {wallet.is_new && (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="pt-6">
+                <div className="flex items-start space-x-3">
+                  <Check className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-green-900">New wallet created!</p>
+                    <p className="text-sm text-green-700 mt-1">
+                      Your personal Circle wallet has been created. Send USDC to the address below.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Wallet Information */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center space-x-2">
-                <Shield className="h-5 w-5" />
-                <span>Network Information</span>
+                <Wallet className="h-5 w-5" />
+                <span>Your Circle Wallet</span>
               </CardTitle>
+              <CardDescription>
+                Your personal deposit address managed by Circle
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Status:</span>
+                <Badge className={wallet.state === 'LIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                  {wallet.state}
+                </Badge>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Network:</span>
                 <Badge className={getNetworkColor()}>
                   {getNetworkName()}
                 </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Network ID:</span>
-                <span className="text-sm font-mono">{poolInfo.network_id || 'N/A'}</span>
               </div>
             </CardContent>
           </Card>
@@ -161,19 +230,31 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
             <CardHeader>
               <CardTitle className="text-lg">Deposit Address</CardTitle>
               <CardDescription>
-                Send USDC to this address. Make sure you're on the correct network.
+                Send USDC to this address. Deposits are processed automatically.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* QR Code */}
+              {qrCodeUrl && (
+                <div className="flex justify-center p-4 bg-white border border-gray-200 rounded-lg">
+                  <img 
+                    src={qrCodeUrl} 
+                    alt="Wallet QR Code" 
+                    className="w-48 h-48"
+                  />
+                </div>
+              )}
+              
+              {/* Address */}
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <div className="flex items-center justify-between">
-                  <div className="font-mono text-sm break-all">
-                    {poolInfo.address}
+                  <div className="font-mono text-sm break-all flex-1 mr-2">
+                    {wallet.address}
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => copyToClipboard(poolInfo.address, 'address')}
+                    onClick={() => copyToClipboard(wallet.address)}
                   >
                     {copiedAddress ? (
                       <Check className="h-4 w-4 text-green-600" />
@@ -183,45 +264,17 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
                   </Button>
                 </div>
               </div>
-              <div className="mt-3 flex items-center space-x-2">
+              
+              {/* Explorer Link */}
+              <div className="flex items-center space-x-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open(`https://polygonscan.com/address/${poolInfo.address}`, '_blank')}
+                  onClick={() => window.open(getBlockchainExplorerUrl(wallet.address), '_blank')}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
-                  View on Polygonscan
+                  View on Explorer
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* USDC Contract */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">USDC Contract Address</CardTitle>
-              <CardDescription>
-                This is the USDC token contract address on {getNetworkName()}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="font-mono text-sm break-all">
-                    {poolInfo.usdc_contract}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(poolInfo.usdc_contract, 'contract')}
-                  >
-                    {copiedContract ? (
-                      <Check className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -238,19 +291,19 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
               <div className="space-y-2 text-sm text-yellow-800">
                 <div className="flex items-start space-x-2">
                   <span className="font-semibold">1.</span>
-                  <span>Make sure you're connected to the <strong>{getNetworkName()}</strong> network in your wallet</span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <span className="font-semibold">2.</span>
                   <span>Only send <strong>USDC</strong> tokens to this address</span>
                 </div>
                 <div className="flex items-start space-x-2">
+                  <span className="font-semibold">2.</span>
+                  <span>Make sure you're sending to the <strong>{getNetworkName()}</strong> network</span>
+                </div>
+                <div className="flex items-start space-x-2">
                   <span className="font-semibold">3.</span>
-                  <span>Add your sending address as a deposit source in your wallet settings</span>
+                  <span>Deposits are processed automatically via Circle webhooks</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <span className="font-semibold">4.</span>
-                  <span>Deposits are processed automatically and may take a few minutes</span>
+                  <span>Your balance will be credited automatically when the transaction is confirmed</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <span className="font-semibold">5.</span>
@@ -259,6 +312,9 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
               </div>
             </CardContent>
           </Card>
+
+          {/* Deposit Monitor */}
+          <DepositMonitor onDepositComplete={handleDepositComplete} />
 
           {/* Processing Time */}
           <Card>
@@ -270,10 +326,11 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
             </CardHeader>
             <CardContent>
               <div className="space-y-2 text-sm text-gray-600">
-                <p>• Deposits are processed automatically when detected on the blockchain</p>
-                <p>• Processing time: 1-5 minutes after blockchain confirmation</p>
-                <p>• You'll receive a notification when your deposit is processed</p>
-                <p>• If your deposit isn't processed within 10 minutes, use the deposit verification tool</p>
+                <p>• Circle automatically detects deposits to your wallet address</p>
+                <p>• Deposits are credited when Circle reports transaction state as COMPLETE</p>
+                <p>• Processing time: Typically 1-5 minutes after blockchain confirmation</p>
+                <p>• Your balance updates automatically - no manual verification needed</p>
+                <p>• If your deposit isn't processed within 10 minutes, use the manual verification tool as a fallback</p>
               </div>
             </CardContent>
           </Card>
@@ -288,9 +345,9 @@ export function CryptoDepositModal({ isOpen, onClose, onDepositInitiated }: Cryp
             </CardHeader>
             <CardContent>
               <div className="space-y-2 text-sm text-gray-600">
-                <p>• If your deposit isn't showing up, use the "Verify Deposit" feature</p>
-                <p>• Make sure you're sending from an address you've added as a deposit source</p>
-                <p>• Double-check that you're on the correct network ({getNetworkName()})</p>
+                <p>• Circle manages your wallet securely - no wallet connection needed</p>
+                <p>• If your deposit isn't showing up, use the "Verify Deposit" feature as a fallback</p>
+                <p>• Double-check that you're sending USDC on the {getNetworkName()} network</p>
                 <p>• Contact support if you need assistance</p>
               </div>
             </CardContent>

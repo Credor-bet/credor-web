@@ -15,7 +15,7 @@ export function ManualDepositVerification({ onDepositVerified }: ManualDepositVe
   const [txHash, setTxHash] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
-    status: 'success' | 'duplicate' | 'ignored' | 'error'
+    status: 'success' | 'duplicate' | 'not_found' | 'not_your_wallet' | 'error'
     message?: string
     reason?: string
   } | null>(null)
@@ -28,14 +28,13 @@ export function ManualDepositVerification({ onDepositVerified }: ManualDepositVe
       setResult(null)
       
       const response = await cryptoService.verifyDeposit({
-        tx_hash: txHash.trim(),
-        user_id: '' // Will be handled by the service with auth token
+        tx_hash: txHash.trim()
       })
       
       setResult({
         status: response.status,
-        message: response.status === 'success' ? 'Deposit detected and being processed' : undefined,
-        reason: response.status !== 'success' ? response.status : undefined
+        message: response.message,
+        reason: response.status !== 'success' ? response.message : undefined
       })
       
       if (response.status === 'success' && onDepositVerified) {
@@ -55,16 +54,18 @@ export function ManualDepositVerification({ onDepositVerified }: ManualDepositVe
     switch (status) {
       case 'success': return 'bg-green-100 text-green-800 border-green-200'
       case 'duplicate': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'ignored': return 'bg-gray-100 text-gray-800 border-gray-200'
+      case 'not_found': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      case 'not_your_wallet': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
       default: return 'bg-red-100 text-red-800 border-red-200'
     }
   }
 
   const getStatusMessage = (status: string) => {
     switch (status) {
-      case 'success': return '✅ Deposit detected and being processed'
+      case 'success': return '✅ Deposit verified and processed'
       case 'duplicate': return '⚠️ Transaction already recorded'
-      case 'ignored': return 'ℹ️ No USDC transfer found in transaction'
+      case 'not_found': return '⚠️ Transaction not found in Circle for your wallet'
+      case 'not_your_wallet': return '⚠️ This transaction does not belong to your wallet'
       default: return '❌ Verification failed'
     }
   }
@@ -76,8 +77,11 @@ export function ManualDepositVerification({ onDepositVerified }: ManualDepositVe
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             Manual Deposit Verification
           </h3>
-          <p className="text-sm text-gray-600">
-            If your deposit wasn't automatically detected, enter your transaction hash below.
+          <p className="text-sm text-gray-600 mb-2">
+            Circle automatically processes deposits to your wallet address. Use this tool only if Circle webhooks fail to process your deposit automatically.
+          </p>
+          <p className="text-sm text-gray-500">
+            Enter your transaction hash below to manually verify and process the deposit.
           </p>
         </div>
 

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { cryptoService, PendingDeposit } from '@/lib/crypto-service'
+import { useState, useEffect, useCallback } from 'react'
+import { useAuthStore } from '@/lib/store'
+import { cryptoService, CircleDeposit } from '@/lib/crypto-service'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -9,22 +10,47 @@ interface PendingDepositsNotificationProps {
   onDepositComplete?: () => void
 }
 
+// Circle deposit states that are considered pending
+const PENDING_STATES: CircleDeposit['state'][] = ['INITIATED', 'QUEUED', 'CLEARED', 'SENT', 'CONFIRMED']
+
 export function PendingDepositsNotification({ onDepositComplete }: PendingDepositsNotificationProps) {
-  const [pendingDeposits, setPendingDeposits] = useState<PendingDeposit[]>([])
+  const [pendingDeposits, setPendingDeposits] = useState<CircleDeposit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { user } = useAuthStore()
 
-  const fetchPendingDeposits = async () => {
+  const fetchPendingDeposits = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false)
+      return
+    }
+
     try {
-      const deposits = await cryptoService.getPendingDeposits()
-      setPendingDeposits(deposits)
+      // Fetch Circle deposits and filter for pending states
+      const allDeposits = await cryptoService.getCircleDeposits(user.id, 50, 0)
+      const pending = allDeposits.filter(deposit => 
+        deposit.circle_tx_type === 'INBOUND' && 
+        PENDING_STATES.includes(deposit.state) &&
+        deposit.transactions?.status !== 'completed'
+      )
+      setPendingDeposits(pending)
       setError('')
+      
+      // Check if any deposits were completed
+      const completed = allDeposits.filter(deposit => 
+        deposit.state === 'COMPLETE' && 
+        deposit.transactions?.status === 'completed'
+      )
+      if (completed.length > 0 && onDepositComplete) {
+        onDepositComplete()
+      }
     } catch (err) {
       // Don't show error for 500/404 responses - just silently fail
       if (err instanceof Error && (
         err.message.includes('500') || 
         err.message.includes('404') ||
-        err.message.includes('Server returned HTML')
+        err.message.includes('Server returned HTML') ||
+        err.message.includes('No authentication token')
       )) {
         console.log('Pending deposits endpoint not available:', err.message)
         setPendingDeposits([])
@@ -35,15 +61,17 @@ export function PendingDepositsNotification({ onDepositComplete }: PendingDeposi
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.id, onDepositComplete])
 
   useEffect(() => {
-    fetchPendingDeposits()
-    
-    // Check for updates every 30 seconds
-    const interval = setInterval(fetchPendingDeposits, 30000)
-    return () => clearInterval(interval)
-  }, [])
+    if (user?.id) {
+      fetchPendingDeposits()
+      
+      // Check for updates every 30 seconds
+      const interval = setInterval(fetchPendingDeposits, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [user?.id, fetchPendingDeposits])
 
   if (loading) return null
   if (error) return null
@@ -67,27 +95,32 @@ export function PendingDepositsNotification({ onDepositComplete }: PendingDeposi
             </Badge>
           </div>
           <p className="text-sm text-blue-700 mb-3">
-            Your deposits are being confirmed on the blockchain. This usually takes 1-5 minutes.
+            Your deposits are being processed by Circle. This usually takes 1-5 minutes after blockchain confirmation.
           </p>
           
           <div className="space-y-2">
             {pendingDeposits.map((deposit) => (
-              <div key={deposit.transaction_id} className="bg-white p-3 rounded border border-blue-200">
+              <div key={deposit.id} className="bg-white p-3 rounded border border-blue-200">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium text-gray-900">
-                      ${deposit.amount} USDC
+                      ${deposit.amount_usd} USDC
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {deposit.message}
+                      Status: {deposit.state}
                     </p>
+                    {deposit.tx_hash && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        TX: {deposit.tx_hash.substring(0, 10)}...
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-gray-500">
-                      TX: {deposit.tx_hash.substring(0, 8)}...
-                    </p>
-                    <p className="text-xs text-blue-600 mt-1">
-                      {deposit.estimated_completion}
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
+                      {deposit.state}
+                    </Badge>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(deposit.created_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
@@ -99,4 +132,5 @@ export function PendingDepositsNotification({ onDepositComplete }: PendingDeposi
     </Card>
   )
 }
+
 

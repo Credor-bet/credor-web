@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { cryptoService, WithdrawalRequest, WithdrawalEstimate } from '@/lib/crypto-service'
+import { cryptoService, WithdrawalRequest, WithdrawalEstimate, WithdrawalResponse } from '@/lib/crypto-service'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { WithdrawalStatus } from './withdrawal-status'
 import { 
   ArrowUpRight, 
   AlertCircle,
@@ -32,7 +33,7 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
   const [isEstimating, setIsEstimating] = useState(false)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
   const [estimate, setEstimate] = useState<WithdrawalEstimate | null>(null)
-  const [withdrawalId, setWithdrawalId] = useState<string | null>(null)
+  const [withdrawalResponse, setWithdrawalResponse] = useState<WithdrawalResponse | null>(null)
   const { user, wallet } = useAuthStore()
 
   const handleEstimateFee = async () => {
@@ -50,8 +51,10 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
       return
     }
 
-    if (wallet && numAmount > wallet.balance) {
-      toast.error('Insufficient balance')
+    // Check available balance (balance - locked_balance)
+    const availableBalance = wallet ? (wallet.balance - (wallet.locked_balance || 0)) : 0
+    if (wallet && numAmount > availableBalance) {
+      toast.error(`Insufficient balance. Available: ${formatUSDC(availableBalance)} USDC`)
       return
     }
 
@@ -76,8 +79,10 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
       return
     }
 
-    if (wallet && numAmount > wallet.balance) {
-      toast.error('Insufficient balance')
+    // Check available balance (balance - locked_balance)
+    const availableBalance = wallet ? (wallet.balance - (wallet.locked_balance || 0)) : 0
+    if (wallet && numAmount > availableBalance) {
+      toast.error(`Insufficient balance. Available: ${formatUSDC(availableBalance)} USDC`)
       return
     }
 
@@ -87,11 +92,12 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
         user_id: user.id,
         amount: numAmount,
         to_address: toAddress.toLowerCase(),
-        idempotency_key: cryptoService.generateIdempotencyKey()
+        // Optional: client_request_id for retry idempotency
+        client_request_id: cryptoService.generateClientRequestId()
       }
 
       const result = await cryptoService.createWithdrawal(withdrawalRequest)
-      setWithdrawalId(result.id)
+      setWithdrawalResponse(result)
       onWithdrawalCreated?.(result.id)
       toast.success('Withdrawal submitted successfully!')
     } catch (error) {
@@ -107,7 +113,15 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
     setToAddress('')
     setAmount('')
     setEstimate(null)
-    setWithdrawalId(null)
+    setWithdrawalResponse(null)
+  }
+
+  const handleWithdrawalComplete = (status: WithdrawalResponse) => {
+    setWithdrawalResponse(status)
+    // Refresh wallet balance when withdrawal completes
+    if (onWithdrawalCreated) {
+      onWithdrawalCreated(status.id)
+    }
   }
 
   const handleDialogClose = (open: boolean) => {
@@ -117,12 +131,25 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
     }
   }
 
-  const formatUSDC = (amount: number) => {
-    return amount.toFixed(6)
+  const formatUSDC = (amount: number | string | undefined | null): string => {
+    if (amount === undefined || amount === null || amount === '') return '0.000000'
+    try {
+      const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
+      if (isNaN(numAmount) || !isFinite(numAmount)) return '0.000000'
+      return numAmount.toFixed(6)
+    } catch {
+      return '0.000000'
+    }
   }
 
-  const formatETH = (amount: number) => {
-    return amount.toFixed(6)
+  const formatETH = (amount: number | undefined | null): string => {
+    if (amount === undefined || amount === null) return '0.000000'
+    try {
+      if (isNaN(amount) || !isFinite(amount)) return '0.000000'
+      return amount.toFixed(6)
+    } catch {
+      return '0.000000'
+    }
   }
 
   return (
@@ -139,7 +166,7 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
         </DialogHeader>
 
         <div className="space-y-4">
-          {!withdrawalId ? (
+          {!withdrawalResponse ? (
             <>
               {/* Withdrawal Form */}
               <div className="space-y-3">
@@ -172,7 +199,12 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
                   </div>
                   {wallet && (
                     <p className="text-xs text-gray-500">
-                      Available: {formatUSDC(wallet.balance)} USDC
+                      Available: {formatUSDC(wallet.balance - (wallet.locked_balance || 0))} USDC
+                      {wallet.locked_balance > 0 && (
+                        <span className="text-yellow-600 ml-1">
+                          ({formatUSDC(wallet.locked_balance)} locked)
+                        </span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -207,26 +239,32 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
               {estimate && (
                 <Card className="border-blue-200 bg-blue-50">
                   <CardContent className="p-4 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">Network:</span>
-                      <Badge variant="outline" className="text-xs">
-                        {estimate.network}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">Gas Cost:</span>
-                      <span className="font-mono text-xs">
-                        {formatETH(estimate.total_cost_eth)} ETH
-                      </span>
-                    </div>
-                    <div className="pt-2 border-t border-blue-200">
+                    {estimate.network && (
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">Withdrawing:</span>
-                        <span className="font-mono font-semibold">
-                          {formatUSDC(parseFloat(amount))} USDC
+                        <span className="font-medium">Network:</span>
+                        <Badge variant="outline" className="text-xs">
+                          {estimate.network}
+                        </Badge>
+                      </div>
+                    )}
+                    {(estimate.total_cost_eth !== undefined && estimate.total_cost_eth !== null) && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">Gas Cost:</span>
+                        <span className="font-mono text-xs">
+                          {formatETH(estimate.total_cost_eth)} ETH
                         </span>
                       </div>
-                    </div>
+                    )}
+                    {amount && (
+                      <div className="pt-2 border-t border-blue-200">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">Withdrawing:</span>
+                          <span className="font-mono font-semibold">
+                            {formatUSDC(amount)} USDC
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -253,42 +291,73 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
               )}
             </>
           ) : (
-            /* Withdrawal Success */
-            <Card className="border-green-200 bg-green-50">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center space-x-2 text-green-800">
-                  <CheckCircle className="h-4 w-4" />
-                  <span className="font-medium text-sm">Withdrawal Submitted</span>
-                </div>
-                <div className="text-xs text-green-700">
-                  Processing on blockchain. Track status in transaction history.
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Amount:</span>
-                    <span className="font-mono">
-                      {formatUSDC(parseFloat(amount))} USDC
-                    </span>
+            /* Withdrawal Status */
+            <div className="space-y-4">
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center space-x-2 text-green-800">
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="font-medium text-sm">Withdrawal Submitted</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">To:</span>
-                    <div className="flex items-center space-x-1">
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Amount:</span>
                       <span className="font-mono">
-                        {toAddress.slice(0, 8)}...{toAddress.slice(-6)}
+                        {formatUSDC(withdrawalResponse.amount)} USDC
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0"
-                        onClick={() => window.open(`https://polygonscan.com/address/${toAddress}`, '_blank')}
-                      >
-                        <ExternalLink className="h-2 w-2" />
-                      </Button>
                     </div>
+                    {withdrawalResponse.to_address && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">To:</span>
+                        <div className="flex items-center space-x-1">
+                          <span className="font-mono">
+                            {withdrawalResponse.to_address.length > 14
+                              ? `${withdrawalResponse.to_address.slice(0, 8)}...${withdrawalResponse.to_address.slice(-6)}`
+                              : withdrawalResponse.to_address}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0"
+                            onClick={() => window.open(`https://polygonscan.com/address/${withdrawalResponse.to_address}`, '_blank')}
+                          >
+                            <ExternalLink className="h-2 w-2" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {withdrawalResponse.transaction_hash && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">Transaction:</span>
+                        <div className="flex items-center space-x-1">
+                          <span className="font-mono text-xs">
+                            {withdrawalResponse.transaction_hash.length > 8
+                              ? `${withdrawalResponse.transaction_hash.slice(0, 8)}...`
+                              : withdrawalResponse.transaction_hash}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0"
+                            onClick={() => window.open(`https://polygonscan.com/tx/${withdrawalResponse.transaction_hash}`, '_blank')}
+                          >
+                            <ExternalLink className="h-2 w-2" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Withdrawal Status Monitor */}
+              {withdrawalResponse.id && (
+                <WithdrawalStatus 
+                  transactionId={withdrawalResponse.id}
+                  onComplete={handleWithdrawalComplete}
+                />
+              )}
+            </div>
           )}
 
           {/* Help Information - Compact */}
@@ -301,9 +370,9 @@ export function CryptoWithdrawalModal({ isOpen, onClose, onWithdrawalCreated }: 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-2 pt-3 border-t">
             <Button variant="outline" size="sm" onClick={() => handleDialogClose(false)}>
-              {withdrawalId ? 'Close' : 'Cancel'}
+              {withdrawalResponse ? 'Close' : 'Cancel'}
             </Button>
-            {withdrawalId && (
+            {withdrawalResponse && withdrawalResponse.status !== 'pending' && (
               <Button size="sm" onClick={resetForm}>
                 New Withdrawal
               </Button>

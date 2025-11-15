@@ -33,7 +33,7 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
   const { user } = useAuthStore()
 
   const handleVerification = async () => {
-    if (!user?.id || !txHash.trim()) return
+    if (!txHash.trim()) return
 
     // Basic transaction hash validation
     if (!txHash.startsWith('0x') || txHash.length !== 66) {
@@ -44,8 +44,7 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
     try {
       setIsVerifying(true)
       const result = await cryptoService.verifyDeposit({
-        tx_hash: txHash,
-        user_id: user.id
+        tx_hash: txHash
       })
       
       setVerificationResult(result)
@@ -54,16 +53,19 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
       // Show appropriate message based on result
       switch (result.status) {
         case 'success':
-          toast.success(`Deposit verified! ${result.amount} USDC credited to your account.`)
+          toast.success(result.message || 'Deposit verified!')
           break
         case 'duplicate':
-          toast.info('This transaction has already been processed.')
+          toast.info(result.message || 'This transaction has already been processed.')
           break
-        case 'ignored':
-          toast.warning('This transaction was not relevant to your account.')
+        case 'not_found':
+          toast.warning(result.message || 'Transaction not found in Circle for your wallet.')
+          break
+        case 'not_your_wallet':
+          toast.warning(result.message || 'This transaction does not belong to your wallet.')
           break
         case 'error':
-          toast.error('Failed to process this transaction.')
+          toast.error(result.message || 'Failed to process this transaction.')
           break
       }
     } catch (error) {
@@ -93,7 +95,9 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
         return <CheckCircle className="h-5 w-5 text-green-600" />
       case 'duplicate':
         return <Info className="h-5 w-5 text-blue-600" />
-      case 'ignored':
+      case 'not_found':
+        return <AlertCircle className="h-5 w-5 text-yellow-600" />
+      case 'not_your_wallet':
         return <AlertCircle className="h-5 w-5 text-yellow-600" />
       case 'error':
         return <XCircle className="h-5 w-5 text-red-600" />
@@ -123,8 +127,10 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
         return 'Deposit successfully processed and credited to your account'
       case 'duplicate':
         return 'This transaction has already been processed'
-      case 'ignored':
-        return 'This transaction was not relevant to your account'
+      case 'not_found':
+        return 'Transaction not found in Circle for your wallet'
+      case 'not_your_wallet':
+        return 'This transaction does not belong to your wallet'
       case 'error':
         return 'Failed to process this transaction'
       default:
@@ -147,11 +153,24 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
             <span>Verify Deposit</span>
           </DialogTitle>
           <DialogDescription>
-            If your deposit isn't showing up in your wallet, you can verify it using the transaction hash.
+            Advanced verification for dispute resolution and manual processing when Circle webhooks fail.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Info Banner */}
+          <div className="flex items-start space-x-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-yellow-900 mb-1">
+                Fallback Verification Method
+              </p>
+              <p className="text-sm text-yellow-800">
+                Circle automatically processes deposits via webhooks. Only use this tool if your deposit wasn't automatically credited after 10+ minutes, or for dispute resolution.
+              </p>
+            </div>
+          </div>
+
           {/* Input Form */}
           <div className="space-y-4">
             <div className="space-y-2">
@@ -171,7 +190,7 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
             <div className="flex items-center space-x-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <Info className="h-4 w-4 text-blue-600" />
               <p className="text-sm text-blue-800">
-                This will check if your deposit was processed and credit it to your account if it was missed.
+                This will manually verify and process the deposit if Circle webhooks failed to process it automatically.
               </p>
             </div>
 
@@ -211,25 +230,9 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
                   </Badge>
                 </div>
 
-                <div className="text-sm text-gray-600">
-                  {getStatusMessage(verificationResult.status)}
-                </div>
-
-                {verificationResult.amount && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Amount:</span>
-                    <span className="text-sm font-mono">
-                      {verificationResult.amount} USDC
-                    </span>
-                  </div>
-                )}
-
-                {verificationResult.new_balance && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">New Balance:</span>
-                    <span className="text-sm font-mono">
-                      {verificationResult.new_balance} USDC
-                    </span>
+                {verificationResult.message && (
+                  <div className="text-sm text-gray-600">
+                    {verificationResult.message}
                   </div>
                 )}
 
@@ -242,23 +245,52 @@ export function DepositVerification({ onDepositVerified }: DepositVerificationPr
                   </div>
                 )}
 
-                <div className="pt-3 border-t">
+                {verificationResult.circle_tx_id && (
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Transaction Hash:</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-mono">
-                        {verificationResult.tx_hash.slice(0, 10)}...{verificationResult.tx_hash.slice(-8)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => window.open(`https://polygonscan.com/tx/${verificationResult.tx_hash}`, '_blank')}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
+                    <span className="text-sm font-medium">Circle Transaction ID:</span>
+                    <span className="text-sm font-mono">
+                      {verificationResult.circle_tx_id}
+                    </span>
+                  </div>
+                )}
+
+                {verificationResult.state && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">State:</span>
+                    <Badge variant="secondary">
+                      {verificationResult.state}
+                    </Badge>
+                  </div>
+                )}
+
+                {verificationResult.credited !== undefined && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Credited:</span>
+                    <Badge variant={verificationResult.credited ? "default" : "secondary"}>
+                      {verificationResult.credited ? 'Yes' : 'No'}
+                    </Badge>
+                  </div>
+                )}
+
+                {verificationResult.tx_hash && (
+                  <div className="pt-3 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Transaction Hash:</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-mono">
+                          {verificationResult.tx_hash.slice(0, 10)}...{verificationResult.tx_hash.slice(-8)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(`https://polygonscan.com/tx/${verificationResult.tx_hash}`, '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {verificationResult.status === 'success' && (
                   <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">

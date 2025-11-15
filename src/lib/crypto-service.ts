@@ -112,17 +112,18 @@ export interface WithdrawalEstimate {
 }
 
 export interface DepositVerificationRequest {
-  tx_hash: string
-  user_id: string
+  tx_hash?: string  // Optional: blockchain transaction hash
+  circle_tx_id?: string  // Optional: Circle transaction ID
 }
 
 export interface DepositVerificationResponse {
-  status: 'success' | 'duplicate' | 'ignored' | 'error'
-  user_id: string
-  amount?: number
-  new_balance?: number
+  status: 'success' | 'duplicate' | 'not_found' | 'not_your_wallet' | 'error'
+  message: string
   transaction_id?: string
-  tx_hash: string
+  circle_tx_id?: string
+  state?: 'INITIATED' | 'CONFIRMED' | 'COMPLETE' | 'FAILED'
+  credited?: boolean
+  tx_hash?: string
 }
 
 export interface UserBalance {

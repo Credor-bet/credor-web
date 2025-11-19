@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
 import { PrivacySettings } from '@/components/settings/privacy-settings'
+import { SportPreferences } from '@/components/settings/sport-preferences'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { User, Mail, Calendar, MapPin, Phone } from 'lucide-react'
 
@@ -110,6 +111,9 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Sport Preferences */}
+        <SportPreferences />
 
         {/* Privacy Settings */}
         <PrivacySettings />

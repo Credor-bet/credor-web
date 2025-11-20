@@ -1,0 +1,289 @@
+{
+  "colors": {
+    "primary": {
+      "hsl": "135 63% 28%",
+      "rgb": "rgb(26, 116, 49)",
+      "hex": "#1A7431",
+      "description": "Main brand green - used for buttons, links, active states",
+      "usage": ["login", "bet", "wallet", "accept", "view-wallet"]
+    },
+    "primary-dark": {
+      "hsl": "135 62% 17%",
+      "rgb": "rgb(16, 69, 29)",
+      "hex": "#10451D",
+      "description": "Darker brand green - used for hover states, backgrounds",
+      "usage": ["frame-1171288041", "subtract"]
+    },
+    "success": {
+      "hsl": "135 70% 52%",
+      "rgb": "rgb(49, 218, 92)",
+      "hex": "#31DA5C",
+      "description": "Success green - used for wins, success messages",
+      "usage": ["you-won"]
+    },
+    "destructive": {
+      "hsl": "358 85% 52%",
+      "rgb": "rgb(237, 28, 36)",
+      "hex": "#ED1C24",
+      "description": "Error red - used for errors, destructive actions",
+      "usage": ["username-is-required", "email-is-required", "password-is-required", "reject", "remove-friend"]
+    },
+    "danger": {
+      "hsl": "359 70% 52%",
+      "rgb": "rgb(218, 49, 52)",
+      "hex": "#DA3134",
+      "description": "Danger red - used for losses, warnings",
+      "usage": ["you-lost"]
+    },
+    "warning": {
+      "hsl": "43 86% 46%",
+      "rgb": "rgb(219, 161, 17)",
+      "hex": "#DBA111",
+      "description": "Warning yellow - used for pending states, warnings",
+      "usage": ["pending", "path3381", "rectangle-118"]
+    },
+    "background": {
+      "hsl": "210 67% 99%",
+      "rgb": "rgb(250, 252, 254)",
+      "hex": "#FAFCFE",
+      "description": "Light blue background - used for card backgrounds, active states",
+      "usage": ["register", "active", "error", "home"]
+    },
+    "background-light": {
+      "hsl": "210 14% 97%",
+      "rgb": "rgb(247, 248, 249)",
+      "hex": "#F7F8F9",
+      "description": "Light gray background - used for input fields, disabled states",
+      "usage": ["frame-1171288070", "frame-1171288073", "frame-1171288071", "frame-1171288074"]
+    },
+    "background-gray": {
+      "hsl": "0 0% 92%",
+      "rgb": "rgb(235, 235, 235)",
+      "hex": "#EBEBEB",
+      "description": "Gray background",
+      "usage": ["frame-1171287977"]
+    },
+    "foreground": {
+      "hsl": "219 19% 15%",
+      "rgb": "rgb(30, 35, 44)",
+      "hex": "#1E232C",
+      "description": "Primary text color - used for headings, important text",
+      "usage": ["welcome-back-glad-to-see-you-again", "youve-been-challenged"]
+    },
+    "foreground-muted": {
+      "hsl": "216 18% 34%",
+      "rgb": "rgb(71, 84, 103)",
+      "hex": "#475467",
+      "description": "Secondary text color - used for body text",
+      "usage": ["text"]
+    },
+    "foreground-placeholder": {
+      "hsl": "212 14% 57%",
+      "rgb": "rgb(131, 145, 161)",
+      "hex": "#8391A1",
+      "description": "Placeholder text color - used for inputs, hints",
+      "usage": ["enter-your-username", "enter-your-email", "create-a-password", "confirm-password", "select-sport"]
+    },
+    "border": {
+      "hsl": "218 17% 91%",
+      "rgb": "rgb(228, 231, 236)",
+      "hex": "#E4E7EC",
+      "description": "Border color - used for dividers, borders",
+      "usage": ["divider"]
+    },
+    "border-gray": {
+      "hsl": "217 10% 84%",
+      "rgb": "rgb(210, 213, 218)",
+      "hex": "#D2D5DA",
+      "description": "Light gray border",
+      "usage": ["rectangle-39842"]
+    },
+    "white": {
+      "hsl": "0 0% 100%",
+      "rgb": "rgb(255, 255, 255)",
+      "hex": "#FFFFFF",
+      "description": "Pure white",
+      "usage": ["general white backgrounds, text on dark"]
+    },
+    "black": {
+      "hsl": "0 0% 0%",
+      "rgb": "rgb(0, 0, 0)",
+      "hex": "#000000",
+      "description": "Pure black",
+      "usage": ["general black text, icons"]
+    },
+    "black-opacity-70": {
+      "hsl": "0 0% 0%",
+      "rgb": "rgb(0, 0, 0)",
+      "hex": "#000000",
+      "opacity": 0.7,
+      "description": "Black with 70% opacity",
+      "usage": ["challenger-zone", "upcoming-bet", "mrbeast2-has-challenged-you"]
+    },
+    "black-opacity-50": {
+      "hsl": "0 0% 0%",
+      "rgb": "rgb(0, 0, 0)",
+      "hex": "#000000",
+      "opacity": 0.5,
+      "description": "Black with 50% opacity",
+      "usage": ["review-and-accept-bets", "view-all", "5m", "21m"]
+    },
+    "white-opacity-70": {
+      "hsl": "0 0% 100%",
+      "rgb": "rgb(255, 255, 255)",
+      "hex": "#FFFFFF",
+      "opacity": 0.7,
+      "description": "White with 70% opacity",
+      "usage": ["challenge-real-players", "not-started"]
+    },
+    "accent-yellow": {
+      "hsl": "78 26% 75%",
+      "rgb": "rgb(199, 209, 176)",
+      "hex": "#C7D1B0",
+      "description": "Accent yellow/green",
+      "usage": ["ellipse-1", "ellipse-2", "ellipse-5"]
+    },
+    "accent-blue": {
+      "hsl": "212 96% 30%",
+      "rgb": "rgb(3, 70, 148)",
+      "hex": "#034694",
+      "description": "Accent blue",
+      "usage": ["path3383", "path3070"]
+    }
+  },
+  "typography": {
+    "font-family": {
+      "sans": {
+        "value": "DM Sans",
+        "description": "Primary font family"
+      },
+      "display": {
+        "value": "Rushon Ground",
+        "description": "Display font for logos/branding"
+      }
+    },
+    "font-sizes": {
+      "xs": {
+        "value": "11px",
+        "lineHeight": "14.322px",
+        "usage": "Very small text, labels"
+      },
+      "sm": {
+        "value": "12px",
+        "lineHeight": "15.624px",
+        "usage": "Small text, captions, secondary info"
+      },
+      "base": {
+        "value": "14px",
+        "lineHeight": "18.228px",
+        "usage": "Body text, default size"
+      },
+      "md": {
+        "value": "15px",
+        "lineHeight": "18.75px",
+        "usage": "Medium text, form labels"
+      },
+      "lg": {
+        "value": "16px",
+        "lineHeight": "20px",
+        "usage": "Large body text, input text"
+      },
+      "xl": {
+        "value": "20px",
+        "lineHeight": "26.04px",
+        "usage": "Headings, titles"
+      },
+      "2xl": {
+        "value": "30px",
+        "lineHeight": "39px",
+        "usage": "Large headings"
+      },
+      "display": {
+        "value": "224px",
+        "lineHeight": "257.688px",
+        "usage": "Logo/display text only"
+      }
+    },
+    "font-weights": {
+      "regular": {
+        "value": 400,
+        "usage": "Body text, normal weight"
+      },
+      "medium": {
+        "value": 500,
+        "usage": "Medium emphasis, buttons"
+      },
+      "semibold": {
+        "value": 600,
+        "usage": "Headings, emphasized text"
+      },
+      "bold": {
+        "value": 700,
+        "usage": "Strong emphasis, important headings"
+      }
+    }
+  },
+  "border-radius": {
+    "none": {
+      "value": "0px",
+      "usage": "No radius"
+    },
+    "sm": {
+      "value": "4px",
+      "usage": "Small elements, inputs"
+    },
+    "md": {
+      "value": "6px",
+      "usage": "Buttons, small cards"
+    },
+    "base": {
+      "value": "8px",
+      "usage": "Default radius for cards, buttons"
+    },
+    "lg": {
+      "value": "12px",
+      "usage": "Larger cards"
+    },
+    "xl": {
+      "value": "16px",
+      "usage": "Large cards, containers"
+    },
+    "2xl": {
+      "value": "18px",
+      "usage": "Extra large cards"
+    },
+    "3xl": {
+      "value": "22px",
+      "usage": "Large containers"
+    },
+    "4xl": {
+      "value": "24px",
+      "usage": "Wallet cards, large containers"
+    },
+    "full": {
+      "value": "100px",
+      "usage": "Pill shape, circles"
+    },
+    "logo": {
+      "value": "40px",
+      "usage": "Logo radius"
+    }
+  },
+  "spacing": {
+    "note": "Spacing values extracted from padding values in Figma",
+    "xs": "4px",
+    "sm": "8px",
+    "md": "12px",
+    "lg": "16px",
+    "xl": "24px",
+    "2xl": "30px",
+    "3xl": "36px"
+  },
+  "metadata": {
+    "generated": "2025-01-20",
+    "source": "Figma file: Credor (sRSHWjCAVu4gvILErghTe3)",
+    "version": "cleaned-v1.0",
+    "description": "Semantic design tokens extracted and cleaned from Figma designs"
+  }
+}
+

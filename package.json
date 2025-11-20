@@ -6,7 +6,11 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "figma:tokens": "node scripts/extract-figma-tokens.js",
+    "figma:assets": "node scripts/extract-figma-assets.js",
+    "figma:merge": "node scripts/merge-figma-tokens.js",
+    "figma:merge-cleaned": "node scripts/merge-cleaned-tokens.js"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",

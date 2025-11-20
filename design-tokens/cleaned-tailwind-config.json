@@ -1,0 +1,76 @@
+{
+  "theme": {
+    "extend": {
+      "colors": {
+        "primary": {
+          "DEFAULT": "hsl(var(--primary))",
+          "dark": "hsl(var(--primary-dark))"
+        },
+        "success": "hsl(var(--success))",
+        "destructive": "hsl(var(--destructive))",
+        "danger": "hsl(var(--danger))",
+        "warning": "hsl(var(--warning))",
+        "background": {
+          "DEFAULT": "hsl(var(--background))",
+          "light": "hsl(var(--background-light))",
+          "gray": "hsl(var(--background-gray))"
+        },
+        "foreground": {
+          "DEFAULT": "hsl(var(--foreground))",
+          "muted": "hsl(var(--foreground-muted))",
+          "placeholder": "hsl(var(--foreground-placeholder))"
+        },
+        "border": {
+          "DEFAULT": "hsl(var(--border))",
+          "gray": "hsl(var(--border-gray))"
+        },
+        "accent": {
+          "yellow": "hsl(var(--accent-yellow))",
+          "blue": "hsl(var(--accent-blue))"
+        }
+      },
+      "fontFamily": {
+        "sans": ["DM Sans", "system-ui", "sans-serif"],
+        "display": ["Rushon Ground", "DM Sans", "sans-serif"]
+      },
+      "fontSize": {
+        "xs": ["11px", { "lineHeight": "14.322px" }],
+        "sm": ["12px", { "lineHeight": "15.624px" }],
+        "base": ["14px", { "lineHeight": "18.228px" }],
+        "md": ["15px", { "lineHeight": "18.75px" }],
+        "lg": ["16px", { "lineHeight": "20px" }],
+        "xl": ["20px", { "lineHeight": "26.04px" }],
+        "2xl": ["30px", { "lineHeight": "39px" }],
+        "display": ["224px", { "lineHeight": "257.688px" }]
+      },
+      "fontWeight": {
+        "regular": "400",
+        "medium": "500",
+        "semibold": "600",
+        "bold": "700"
+      },
+      "borderRadius": {
+        "sm": "var(--radius-sm)",
+        "md": "var(--radius-md)",
+        "DEFAULT": "var(--radius)",
+        "lg": "var(--radius-lg)",
+        "xl": "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
+        "3xl": "var(--radius-3xl)",
+        "4xl": "var(--radius-4xl)",
+        "full": "var(--radius-full)",
+        "logo": "var(--radius-logo)"
+      },
+      "spacing": {
+        "xs": "4px",
+        "sm": "8px",
+        "md": "12px",
+        "lg": "16px",
+        "xl": "24px",
+        "2xl": "30px",
+        "3xl": "36px"
+      }
+    }
+  }
+}
+

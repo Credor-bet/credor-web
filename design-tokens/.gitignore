@@ -1,0 +1,6 @@
+# Ignore extracted assets
+assets/
+
+# But keep the manifest
+!assets/manifest.json
+

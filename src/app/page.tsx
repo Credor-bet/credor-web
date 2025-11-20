@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { supabase } from '@/lib/supabase'
 
 interface SlideData {
   id: number
@@ -32,15 +33,38 @@ const slides: SlideData[] = [
 export default function HomePage() {
   const router = useRouter()
   const [currentSlide, setCurrentSlide] = useState(0)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
+  // Check authentication and redirect if signed in
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          // User is authenticated, redirect to dashboard
+          router.push('/dashboard')
+          return
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error)
+      } finally {
+        setIsCheckingAuth(false)
+      }
+    }
+
+    checkAuth()
+  }, [router])
 
   // Auto-advance slides every 4 seconds
   useEffect(() => {
+    if (isCheckingAuth) return // Don't start slideshow until auth check is done
+    
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length)
     }, 4000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [isCheckingAuth])
 
   const handleLogin = () => {
     router.push('/signin')
@@ -48,6 +72,15 @@ export default function HomePage() {
 
   const handleRegister = () => {
     router.push('/signup')
+  }
+
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+      </div>
+    )
   }
 
   return (

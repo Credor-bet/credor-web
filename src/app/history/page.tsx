@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore, useBettingStore } from '@/lib/store'
+import type { BetPredictionWithPrivacy } from '@/types/bets'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,7 @@ import {
   Ban
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { getAmountDisplay, getBetOriginLabel, getPredictionDisplay } from '@/lib/bet-display'
 
 type FilterType = 'all' | 'upcoming' | 'win' | 'lose' | 'draw'
 
@@ -30,6 +32,7 @@ interface BetWithDetails {
   min_opponent_amount: number
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'settled'
   max_participants: number
+  is_system_generated?: boolean
   created_at: string
   updated_at: string
   settled_at: string | null
@@ -76,11 +79,7 @@ interface BetWithDetails {
     username: string
     avatar_url: string | null
   }
-  bet_predictions?: Array<{
-    user_id: string
-    prediction: string
-    amount: number
-  }>
+  bet_predictions?: BetPredictionWithPrivacy[]
 }
 
 export default function HistoryPage() {
@@ -89,6 +88,7 @@ export default function HistoryPage() {
   const [filteredBets, setFilteredBets] = useState<BetWithDetails[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { user, wallet, refreshWallet } = useAuthStore()
+  const currency = wallet?.currency || 'CREDORR'
   const { betHistory, activeBets, refreshBets } = useBettingStore()
 
   // Load data on component mount
@@ -229,19 +229,6 @@ export default function HistoryPage() {
     return 'Participant'
   }
 
-  const getPredictionText = (prediction: string) => {
-    switch (prediction) {
-      case 'home_win':
-        return 'Home Win'
-      case 'away_win':
-        return 'Away Win'
-      case 'draw':
-        return 'Draw'
-      default:
-        return prediction
-    }
-  }
-
 
 
   const filters: { key: FilterType; label: string }[] = [
@@ -279,7 +266,7 @@ export default function HistoryPage() {
         <div className="flex items-center space-x-2 bg-green-50 px-4 py-2 rounded-lg">
           <Wallet className="h-5 w-5 text-green-600" />
           <span className="font-semibold text-green-700">
-            {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
+            {formatCurrency(wallet?.balance || 0, currency)}
           </span>
         </div>
       </div>
@@ -384,7 +371,35 @@ export default function HistoryPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredBets.map((bet) => (
+          filteredBets.map((bet) => {
+            const userPredictionEntry = bet.bet_predictions?.find(p => p.user_id === user?.id)
+            const opponentPredictionEntry = bet.bet_predictions?.find(pred => pred.user_id !== user?.id)
+            const userPredictionValue = userPredictionEntry?.prediction
+            const opponentPredictionValue = opponentPredictionEntry?.prediction
+            const matchResult = bet.matches?.match_result
+            const userCorrect = !!matchResult && !!userPredictionValue && userPredictionValue === matchResult
+            const opponentCorrect = !!matchResult && !!opponentPredictionValue && opponentPredictionValue === matchResult
+            const outcomeBackground = bet.status === 'settled'
+              ? userCorrect
+                ? 'bg-green-100'
+                : !opponentCorrect
+                  ? 'bg-yellow-100'
+                  : 'bg-red-100'
+              : 'bg-gray-100'
+            const outcomeIconColor = bet.status === 'settled'
+              ? userCorrect
+                ? 'text-green-600'
+                : !opponentCorrect
+                  ? 'text-yellow-600'
+                  : 'text-red-600'
+              : 'text-gray-600'
+            const originLabel = getBetOriginLabel(bet, 'Unknown event')
+            const opponentHandle = bet.creator_id === user?.id
+              ? bet.opponent?.username || 'Unknown opponent'
+              : originLabel
+            const myPredictionLabel = getPredictionDisplay(userPredictionEntry, bet.matches)
+
+            return (
             <Card 
               key={bet.id} 
               className="overflow-hidden hover:shadow-lg transition-shadow group"
@@ -510,10 +525,7 @@ export default function HistoryPage() {
                           <span className="text-sm font-semibold text-gray-800">My Prediction</span>
                         </div>
                         <Badge variant="outline" className="text-xs font-medium bg-white">
-                          {bet.bet_predictions?.find(p => p.user_id === user?.id)?.prediction 
-                            ? getPredictionText(bet.bet_predictions.find(p => p.user_id === user?.id)?.prediction || '')
-                            : 'Not specified'
-                          }
+                          {myPredictionLabel}
                         </Badge>
                       </div>
                     </div>
@@ -529,48 +541,22 @@ export default function HistoryPage() {
                          </Avatar>
                          <span className="text-sm text-gray-600 font-medium">vs</span>
                          <span className="text-sm font-semibold text-gray-800">
-                           @{bet.creator_id === user?.id 
-                             ? bet.opponent?.username 
-                             : bet.creator?.username || 'unknown'}
+                          @{opponentHandle}
                          </span>
                        </div>
                        
 
                        
                                                <div className="flex items-center space-x-2">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                            bet.status === 'settled' 
-                              ? (() => {
-                                  const userPrediction = bet.bet_predictions?.find(p => p.user_id === user?.id)?.prediction
-                                  const opponentPrediction = bet.bet_predictions?.find(pred => pred.user_id !== user?.id)?.prediction
-                                  const userCorrect = userPrediction === bet.matches?.match_result
-                                  const opponentCorrect = opponentPrediction === bet.matches?.match_result
-                                  
-                                  if (userCorrect) return 'bg-green-100'
-                                  if (!userCorrect && !opponentCorrect) return 'bg-yellow-100' // Draw
-                                  return 'bg-red-100' // Loss
-                                })()
-                              : 'bg-gray-100'
-                          }`}>
-                            {bet.status === 'settled' ? (
-                              <Trophy className={`h-3 w-3 ${
-                                (() => {
-                                  const userPrediction = bet.bet_predictions?.find(p => p.user_id === user?.id)?.prediction
-                                  const opponentPrediction = bet.bet_predictions?.find(pred => pred.user_id !== user?.id)?.prediction
-                                  const userCorrect = userPrediction === bet.matches?.match_result
-                                  const opponentCorrect = opponentPrediction === bet.matches?.match_result
-                                  
-                                  if (userCorrect) return 'text-green-600'
-                                  if (!userCorrect && !opponentCorrect) return 'text-yellow-600' // Draw
-                                  return 'text-red-600' // Loss
-                                })()
-                              }`} />
-                            ) : (
-                              <Clock className="h-3 w-3 text-gray-600" />
-                            )}
-                          </div>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${outcomeBackground}`}>
+                        {bet.status === 'settled' ? (
+                          <Trophy className={`h-3 w-3 ${outcomeIconColor}`} />
+                        ) : (
+                          <Clock className="h-3 w-3 text-gray-600" />
+                        )}
+                      </div>
                          <span className="text-sm font-semibold text-gray-800">
-                           {formatCurrency(bet.min_opponent_amount, wallet?.currency || 'CREDORR')}
+                           {formatCurrency(bet.min_opponent_amount, currency)}
                          </span>
                        </div>
                      </div>
@@ -579,7 +565,8 @@ export default function HistoryPage() {
                 </CardContent>
               </div>
             </Card>
-          ))
+            )
+          })
         )}
       </div>
     </div>

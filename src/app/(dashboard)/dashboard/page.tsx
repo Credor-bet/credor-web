@@ -8,24 +8,27 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { 
-  TrendingUp, 
-  // Users, // Removed unused import
-  Trophy,
-  Coins,
   Target,
-  // Clock, // Removed unused import
   Zap,
-  Eye,
-  Plus
+  Users,
+  ExternalLink
 } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { CreateChallengeDialog } from '@/components/challenges/create-challenge-dialog'
+import { formatDate } from '@/lib/utils'
+import { ActiveBetsModal } from '@/components/challenges/active-bets-modal'
+import { ChallengeService, type Challenge } from '@/lib/challenge-service'
+import { TrendingBetModal } from '@/components/challenges/trending-bet-modal'
+import { getBetOriginLabel, isPublicEvent, PUBLIC_EVENT_LABEL } from '@/lib/bet-display'
 import Link from 'next/link'
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
+  const [isActiveBetsModalOpen, setIsActiveBetsModalOpen] = useState(false)
+  const [trendingBet, setTrendingBet] = useState<Challenge | null>(null)
+  const [isLoadingTrending, setIsLoadingTrending] = useState(true)
+  const [isTrendingBetModalOpen, setIsTrendingBetModalOpen] = useState(false)
+  const [selectedTrendingBet, setSelectedTrendingBet] = useState<Challenge | null>(null)
   const router = useRouter()
-  const { user, wallet, refreshUser, refreshWallet } = useAuthStore()
+  const { user, refreshUser } = useAuthStore()
   
   // Defensive Zustand store access
   const bettingStore = useBettingStore();
@@ -35,30 +38,6 @@ export default function DashboardPage() {
   // Refs to prevent duplicate calls
   const dataLoadRef = useRef(false)
   const userLoadRef = useRef<string | null>(null)
-
-  // Helper function to get bet indicator
-  const getBetIndicator = (bet: { creator_id: string; opponent_id: string | null; status: string }) => {
-    const isCreator = bet.creator_id === user?.id
-    const isOpponent = bet.opponent_id === user?.id
-    
-    if (bet.status === 'accepted') {
-      return { color: 'bg-green-500', text: 'Accepted' }
-    } else if (bet.status === 'pending') {
-      if (isCreator) {
-        return { color: 'bg-yellow-500', text: 'Waiting for opponent' }
-      } else if (isOpponent) {
-        return { color: 'bg-blue-500', text: 'Waiting for you' }
-      }
-    }
-    return { color: 'bg-gray-500', text: bet.status }
-  }
-
-  // Helper function to get bet role
-  const getBetRole = (bet: { creator_id: string; opponent_id: string | null }) => {
-    if (bet.creator_id === user?.id) return 'Creator'
-    if (bet.opponent_id === user?.id) return 'Opponent'
-    return 'Participant'
-  }
 
   // Memoized data loading function
   const loadDashboardData = useCallback(async () => {
@@ -79,14 +58,9 @@ export default function DashboardPage() {
         return null
       })
       
-      // Then load wallet and bets if user exists
+      // Then load bets if user exists
       if (user?.id) {
-        const promises = [
-          refreshWallet().catch(err => {
-            console.error('Error refreshing wallet:', err)
-            return null
-          })
-        ]
+        const promises = []
         
         // Only add refreshBets if it exists
         if (refreshBets) {
@@ -109,7 +83,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [refreshUser, refreshWallet, refreshBets, user?.id])
+  }, [refreshUser, refreshBets, user?.id])
 
   // Main data loading effect
   useEffect(() => {
@@ -153,28 +127,29 @@ export default function DashboardPage() {
     checkSportPreferences()
   }, [user, router])
 
-  // Retry loading wallet and bets when user becomes available (only once)
+  // Load trending bets
   useEffect(() => {
-    if (user?.id && !wallet && !isLoading && !dataLoadRef.current) {
-      const loadWalletAndBets = async () => {
-        try {
-          await Promise.all([
-            refreshWallet().catch(err => {
-              console.error('Error refreshing wallet:', err)
-              return null
-            }),
-            refreshBets?.().catch(err => {
-              console.error('Error refreshing bets:', err)
-              return null
-            })
-          ])
-        } catch (error) {
-          console.error('Error in retry load:', error)
+    const loadTrendingBets = async () => {
+      try {
+        setIsLoadingTrending(true)
+        // getTrendingChallenges already returns bets sorted by participant_count (most popular first)
+        const bets = await ChallengeService.getTrendingChallenges(1)
+        
+        // Get the most popular bet (first result)
+        if (bets.length > 0) {
+          setTrendingBet(bets[0])
         }
+      } catch (error) {
+        console.error('Error loading trending bets:', error)
+      } finally {
+        setIsLoadingTrending(false)
       }
-      loadWalletAndBets()
     }
-  }, [user?.id, wallet, isLoading, refreshWallet, refreshBets])
+    
+    if (user?.id) {
+      loadTrendingBets()
+    }
+  }, [user?.id])
 
   if (isLoading) {
     return (
@@ -183,6 +158,9 @@ export default function DashboardPage() {
       </div>
     )
   }
+
+  const trendingIsPublicEvent = trendingBet ? isPublicEvent(trendingBet) : false
+  const trendingOriginLabel = trendingBet ? getBetOriginLabel(trendingBet, PUBLIC_EVENT_LABEL) : ''
 
   return (
     <div className="md:ml-64 p-4 md:p-6 space-y-6">
@@ -206,23 +184,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Wallet Balance</CardTitle>
-            <Coins className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Available to bet
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
+      <div className="grid grid-cols-1 gap-4">
+        <Card 
+          className="cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => setIsActiveBetsModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Bets</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
@@ -230,168 +196,151 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold">{activeBets.length}</div>
             <p className="text-xs text-muted-foreground">
-              Pending and accepted
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {user?.win_rate || 0}%
-            </div>
-            {/* <p className="text-xs text-muted-foreground">
-              This month
-            </p> */}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Bets</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{user?.total_bets || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              All time
+              Pending and accepted • Click to view all
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Trending Bets - Coming Soon */}
-        <Card className="opacity-60">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+      {/* Trending Bets */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
               <Zap className="h-5 w-5" />
               <span>Trending Bets</span>
-              <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
-            </CardTitle>
-            <CardDescription>
-              Discover popular bets and trending matches
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </div>
+            <Link 
+              href="/dashboard/challenges" 
+              className="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span>View All</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </CardTitle>
+          <CardDescription>
+            Most popular bet right now
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingTrending ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-sm text-muted-foreground mt-2">Loading trending bets...</p>
+            </div>
+          ) : !trendingBet ? (
             <div className="text-center py-8 text-muted-foreground">
               <Zap className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="font-medium mb-2">Trending Bets</p>
-              <p className="text-sm">This feature is coming soon!</p>
-              <p className="text-xs mt-2">You&apos;ll be able to see popular bets and trending matches here.</p>
+              <p className="font-medium mb-2">No trending bets</p>
+              <p className="text-sm">Check back later for popular bets!</p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Active Bets */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Target className="h-5 w-5" />
-              <span>Active Bets</span>
-            </CardTitle>
-            <CardDescription>
-              Your current betting activity
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-sm text-muted-foreground mt-2">Loading bets...</p>
-              </div>
-            ) : activeBets.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
-                <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No active bets</p>
-                <p className="text-sm">Create your first bet to get started!</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {activeBets.slice(0, 3).map((bet: { id: string; creator_id: string; opponent_id: string | null; status: string; created_at: string }) => {
-                  const indicator = getBetIndicator(bet)
-                  const role = getBetRole(bet)
-                  
-                  return (
-                    <div key={bet.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-2 h-2 ${indicator.color} rounded-full`}></div>
-                        <div>
-                          <p className="text-sm font-medium">Bet #{typeof bet.id === "string" ? bet.id.slice(0, 8) : ''}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {role} • {formatDate(bet.created_at)}
-                          </p>
-                        </div>
+          ) : (
+            <div 
+              className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => {
+                setSelectedTrendingBet(trendingBet)
+                setIsTrendingBetModalOpen(true)
+              }}
+            >
+              {trendingBet.match?.home_team && trendingBet.match?.away_team ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className="flex items-center space-x-2 flex-1">
+                        {trendingBet.match.home_team.cloudinary_logo_url || trendingBet.match.home_team.logo_url ? (
+                          <img 
+                            src={trendingBet.match.home_team.cloudinary_logo_url || trendingBet.match.home_team.logo_url || ''} 
+                            alt={trendingBet.match.home_team.name}
+                            className="w-8 h-8 object-contain"
+                          />
+                        ) : null}
+                        <span className="font-semibold text-sm">{trendingBet.match.home_team.name}</span>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="text-xs">
-                          {indicator.text}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            // TODO: Navigate to bet details
-                            console.log('View bet details:', bet.id)
-                          }}
-                        >
-                          <Eye className="h-3 w-3" />
-                        </Button>
+                      <span className="text-muted-foreground">vs</span>
+                      <div className="flex items-center space-x-2 flex-1">
+                        {trendingBet.match.away_team.cloudinary_logo_url || trendingBet.match.away_team.logo_url ? (
+                          <img 
+                            src={trendingBet.match.away_team.cloudinary_logo_url || trendingBet.match.away_team.logo_url || ''} 
+                            alt={trendingBet.match.away_team.name}
+                            className="w-8 h-8 object-contain"
+                          />
+                        ) : null}
+                        <span className="font-semibold text-sm">{trendingBet.match.away_team.name}</span>
                       </div>
                     </div>
-                  )
-                })}
-                {activeBets.length > 3 && (
-                  <Button variant="ghost" className="w-full text-sm">
-                    View all {activeBets.length} active bets
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-2">
+                        {trendingIsPublicEvent ? (
+                          <>
+                            <div className="h-6 w-6 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-[10px] font-semibold flex items-center justify-center">
+                              {PUBLIC_EVENT_LABEL.slice(0, 1)}
+                            </div>
+                            <span className="text-muted-foreground">{PUBLIC_EVENT_LABEL}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Avatar className="h-6 w-6">
+                              <AvatarImage src={trendingBet.creator?.avatar_url || ''} />
+                              <AvatarFallback className="text-xs">
+                                {trendingBet.creator?.username?.charAt(0).toUpperCase() || 'U'}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-muted-foreground">by {trendingOriginLabel}</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">
+                          {trendingBet.participant_count || trendingBet.bet_predictions?.length || 0} {(trendingBet.participant_count || trendingBet.bet_predictions?.length || 0) === 1 ? 'participant' : 'participants'}
+                        </span>
+                      </div>
+                    </div>
+                    {trendingBet.match?.start_time && (
+                      <span className="text-muted-foreground">
+                        {formatDate(trendingBet.match.start_time)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="font-medium">Bet #{trendingBet.id.slice(0, 8)}</p>
+                  {trendingBet.creator && (
+                    <p className="text-sm text-muted-foreground">
+                      by {trendingBet.creator.username}
+                    </p>
+                  )}
+                  <div className="flex items-center space-x-1 text-sm">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      {trendingBet.participant_count || trendingBet.bet_predictions?.length || 0} {(trendingBet.participant_count || trendingBet.bet_predictions?.length || 0) === 1 ? 'participant' : 'participants'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Zap className="h-5 w-5" />
-              <span>Quick Actions</span>
-            </CardTitle>
-            <CardDescription>
-              Get started with challenges and competitions
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <CreateChallengeDialog>
-              <Button className="w-full bg-green-600 hover:bg-green-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Challenge
-              </Button>
-            </CreateChallengeDialog>
-            
-            <Link href="/dashboard/challenges">
-              <Button variant="outline" className="w-full">
-                <Trophy className="h-4 w-4 mr-2" />
-                View All Challenges
-              </Button>
-            </Link>
-            
-            <Link href="/dashboard/friends">
-              <Button variant="outline" className="w-full">
-                <Target className="h-4 w-4 mr-2" />
-                Challenge Friends
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Active Bets Modal */}
+      <ActiveBetsModal 
+        isOpen={isActiveBetsModalOpen} 
+        onClose={() => setIsActiveBetsModalOpen(false)} 
+      />
+      <TrendingBetModal
+        bet={selectedTrendingBet}
+        isOpen={isTrendingBetModalOpen}
+        onClose={() => {
+          setIsTrendingBetModalOpen(false)
+          setSelectedTrendingBet(null)
+        }}
+      />
     </div>
   )
 } 

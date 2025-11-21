@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { supabase } from './supabase'
 import { MatchUpdate } from './websocket-service'
+import { applyPrivacyRulesToBets } from './privacy-utils'
+import type { BetPredictionWithPrivacy } from '@/types/bets'
 
 interface User {
   id: string
@@ -41,6 +43,7 @@ interface Bet {
   min_opponent_amount: number
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'settled'
   max_participants: number
+  is_system_generated?: boolean
   created_at: string
   updated_at: string
   settled_at: string | null
@@ -88,11 +91,7 @@ interface Bet {
     avatar_url: string | null
   }
   // user_prediction will be computed in the component from bet_predictions
-  bet_predictions?: Array<{
-    user_id: string
-    prediction: string
-    amount: number
-  }>
+  bet_predictions?: BetPredictionWithPrivacy[]
 }
 
 interface AuthState {
@@ -313,7 +312,7 @@ export const useBettingStore = create<BettingStore>((set) => ({
            // Now let's get the detailed data for the bets we found
            const betIds = userBets.map(bet => bet.id)
            
-           const { data: detailedBets, error: detailedError } = await supabase
+          const { data: detailedBets, error: detailedError } = await supabase
              .from('bets')
              .select(`
                *,
@@ -335,19 +334,16 @@ export const useBettingStore = create<BettingStore>((set) => ({
              return
            }
 
-                                               if (detailedBets) {
-                          // Don't pre-process user_prediction, let the component handle it
-                          const processedBets = detailedBets
+          const processedBets = await applyPrivacyRulesToBets(detailedBets || [], user.id)
 
-              const active = processedBets.filter(bet => 
-                ['pending', 'accepted'].includes(bet.status)
-              )
-              const history = processedBets.filter(bet => 
-                ['settled', 'cancelled', 'rejected'].includes(bet.status)
-              )
-              
-              set({ activeBets: active, betHistory: history })
-            }
+          const active = processedBets.filter(bet => 
+            ['pending', 'accepted'].includes(bet.status)
+          )
+          const history = processedBets.filter(bet => 
+            ['settled', 'cancelled', 'rejected'].includes(bet.status)
+          )
+          
+          set({ activeBets: active, betHistory: history })
         } catch (error) {
           console.error('Error refreshing bets:', error)
           set({ activeBets: [], betHistory: [] })

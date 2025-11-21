@@ -31,6 +31,7 @@ import { LiveScoreTest } from '@/components/debug/live-score-test'
 import { ServerDiagnostic } from '@/components/debug/server-diagnostic'
 import { ServerStatusCard } from '@/components/debug/server-status-card'
 import { MatchDebug } from '@/components/debug/match-debug'
+import { getBetOriginLabel } from '@/lib/bet-display'
 
 export function ChallengesPage() {
   const [activeTab, setActiveTab] = useState('pending')
@@ -165,14 +166,18 @@ export function ChallengesPage() {
 
   const filteredChallenges = (challenges: Challenge[]) => {
     if (!searchTerm) return challenges
+    const query = searchTerm.toLowerCase()
     
-    return challenges.filter(challenge => 
-      challenge.match?.home_team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      challenge.match?.away_team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      challenge.match?.sport?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      challenge.creator?.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      challenge.opponent?.username.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    return challenges.filter(challenge => {
+      const originLabel = getBetOriginLabel(challenge, '').toLowerCase()
+      return (
+        challenge.match?.home_team.name.toLowerCase().includes(query) ||
+        challenge.match?.away_team.name.toLowerCase().includes(query) ||
+        challenge.match?.sport?.name.toLowerCase().includes(query) ||
+        (originLabel && originLabel.includes(query)) ||
+        challenge.opponent?.username.toLowerCase().includes(query)
+      )
+    })
   }
 
   return (

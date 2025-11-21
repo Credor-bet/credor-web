@@ -27,6 +27,7 @@ import {
 import { toast } from 'sonner'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { LiveMatchScore } from '@/components/matches/live-match-score'
+import { getAmountDisplay, getBetOriginLabel, getPredictionDisplay, isPublicEvent, PUBLIC_EVENT_LABEL } from '@/lib/bet-display'
 
 interface ChallengeCardProps {
   challenge: Challenge
@@ -54,6 +55,9 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
   const [prediction, setPrediction] = useState<PredictionType>(getDefaultPrediction())
   
   const { user, wallet } = useAuthStore()
+  const publicEvent = isPublicEvent(challenge)
+  const originLabel = getBetOriginLabel(challenge, 'Unknown user')
+  const currency = wallet?.currency || 'CREDORR'
 
   // Determine user's role in the challenge
   const isCreator = challenge.creator_id === user?.id
@@ -101,17 +105,6 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
     }
   }
 
-  const getPredictionText = (pred: PredictionType) => {
-    if (!challenge.match) return pred
-    
-    switch (pred) {
-      case 'home_win': return challenge.match.home_team.name
-      case 'away_win': return challenge.match.away_team.name
-      case 'draw': return 'Draw'
-      default: return pred
-    }
-  }
-
   const handleAcceptChallenge = async () => {
     // Validation checks with detailed error messages
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
@@ -120,12 +113,12 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
     }
 
     if (parseFloat(stakeAmount) < challenge.min_opponent_amount) {
-      toast.error(`Minimum stake is ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}`)
+      toast.error(`Minimum stake is ${formatCurrency(challenge.min_opponent_amount, currency)}`)
       return
     }
 
     if (parseFloat(stakeAmount) > (wallet?.balance || 0)) {
-      toast.error(`Insufficient balance. You have ${formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')} available`)
+      toast.error(`Insufficient balance. You have ${formatCurrency(wallet?.balance || 0, currency)} available`)
       return
     }
 
@@ -148,7 +141,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       
       // Dismiss progress toast and show success
       toast.dismiss(progressToast)
-      toast.success(`Challenge accepted! You staked ${formatCurrency(parseFloat(stakeAmount), wallet?.currency || 'CREDORR')} on ${
+      toast.success(`Challenge accepted! You staked ${formatCurrency(parseFloat(stakeAmount), currency)} on ${
         prediction === 'home_win' ? challenge.match?.home_team.name :
         prediction === 'away_win' ? challenge.match?.away_team.name : 'Draw'
       }`, {
@@ -228,7 +221,8 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       
       // Dismiss progress toast and show success
       toast.dismiss(progressToast)
-      toast.success(`Challenge rejected. ${challenge.creator?.username || 'The creator'} has been notified.`, {
+      const rejectionTarget = publicEvent ? PUBLIC_EVENT_LABEL : originLabel
+      toast.success(`Challenge rejected. ${rejectionTarget} has been notified.`, {
         duration: 4000
       })
       
@@ -276,7 +270,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
       const refundAmount = userPrediction?.amount || 0
       
-      toast.success(`Challenge cancelled successfully! ${refundAmount > 0 ? `${formatCurrency(refundAmount, wallet?.currency || 'CREDORR')} has been refunded to your wallet.` : ''}`, {
+      toast.success(`Challenge cancelled successfully! ${refundAmount > 0 ? `${formatCurrency(refundAmount, currency)} has been refunded to your wallet.` : ''}`, {
         duration: 5000
       })
       
@@ -339,7 +333,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
       const refundAmount = userPrediction?.amount || 0
       
-      toast.success(`You have left the challenge. ${formatCurrency(refundAmount, wallet?.currency || 'CREDORR')} has been refunded to your wallet.`, {
+      toast.success(`You have left the challenge. ${formatCurrency(refundAmount, currency)} has been refunded to your wallet.`, {
         duration: 5000
       })
       
@@ -410,11 +404,9 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
               <Badge className={getStatusColor(challenge.status)}>
                 {getStatusText(challenge.status)}
               </Badge>
-              {creatorPrediction && (
-                <div className="text-xs text-muted-foreground">
-                  {formatCurrency(creatorPrediction.amount, wallet?.currency || 'CREDORR')}
-                </div>
-              )}
+              <div className="text-xs text-muted-foreground">
+                {getAmountDisplay(creatorPrediction)}
+              </div>
             </div>
           </div>
 
@@ -531,20 +523,24 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            {challenge.creator && (
-              <div className="flex items-center">
+            <div className="flex items-center">
+              {!publicEvent && challenge.creator ? (
                 <Avatar className="h-8 w-8 mr-2">
                   <AvatarImage src={challenge.creator.avatar_url || ''} />
                   <AvatarFallback>{challenge.creator.username[0]}</AvatarFallback>
                 </Avatar>
-                <div>
-                  <div className="font-medium">{challenge.creator.username}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {isCreator ? 'Your challenge' : 'Challenged you'}
-                  </div>
+              ) : (
+                <div className="h-8 w-8 mr-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-semibold flex items-center justify-center">
+                  {PUBLIC_EVENT_LABEL.slice(0, 1)}
+                </div>
+              )}
+              <div>
+                <div className="font-medium">{originLabel}</div>
+                <div className="text-xs text-muted-foreground">
+                  {publicEvent ? PUBLIC_EVENT_LABEL : isCreator ? 'Your challenge' : 'Challenged you'}
                 </div>
               </div>
-            )}
+            </div>
           </div>
           
           <Badge className={getStatusColor(challenge.status)}>
@@ -581,19 +577,21 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
         {/* Challenge Details */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="text-sm text-muted-foreground">Creator's Prediction</div>
+            <div className="text-sm text-muted-foreground">
+              {publicEvent ? `${PUBLIC_EVENT_LABEL} prediction` : "Creator's Prediction"}
+            </div>
             <div className="font-medium">
-              {creatorPrediction ? getPredictionText(creatorPrediction.prediction) : 'Unknown'}
+              {getPredictionDisplay(creatorPrediction, challenge.match, 'Unknown')}
             </div>
             <div className="text-sm text-green-600">
-              {creatorPrediction && formatCurrency(creatorPrediction.amount, wallet?.currency || 'CREDORR')}
+              {getAmountDisplay(creatorPrediction, currency)}
             </div>
           </div>
           
           <div>
             <div className="text-sm text-muted-foreground">Min. Opponent Stake</div>
             <div className="font-medium">
-              {formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}
+              {formatCurrency(challenge.min_opponent_amount, currency)}
             </div>
             {challenge.max_participants > 2 && (
               <div className="text-xs text-muted-foreground">
@@ -607,9 +605,9 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
         {userPrediction && (
           <div className="p-3 bg-blue-50 rounded-lg">
             <div className="text-sm text-muted-foreground">Your Prediction</div>
-            <div className="font-medium">{getPredictionText(userPrediction.prediction)}</div>
+            <div className="font-medium">{getPredictionDisplay(userPrediction, challenge.match, 'Not set')}</div>
             <div className="text-sm text-blue-600">
-              {formatCurrency(userPrediction.amount, wallet?.currency || 'CREDORR')}
+              {getAmountDisplay(userPrediction, currency)}
             </div>
           </div>
         )}
@@ -757,6 +755,9 @@ function AcceptChallengeForm({
   isLoading
 }: AcceptChallengeFormProps) {
   const { wallet } = useAuthStore()
+  const publicEvent = isPublicEvent(challenge)
+  const creatorLabel = publicEvent ? `${PUBLIC_EVENT_LABEL} default pick` : 'Creator picked'
+  const currency = wallet?.currency || 'CREDORR'
   
   // Get creator's prediction to disable the same option
   const creatorPrediction = challenge.bet_predictions?.find(p => p.user_id === challenge.creator_id)
@@ -814,7 +815,7 @@ function AcceptChallengeForm({
       <div className="p-3 bg-blue-50 rounded-lg">
         <div className="text-xs text-muted-foreground">Available Balance</div>
         <div className="text-lg font-bold">
-          {formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')}
+          {formatCurrency(wallet?.balance || 0, currency)}
         </div>
       </div>
 
@@ -822,9 +823,7 @@ function AcceptChallengeForm({
       <div>
         <Label className="text-sm font-medium">Your Prediction</Label>
         <div className="text-xs text-muted-foreground mb-2">
-          Creator picked: {creatorPredictionType === 'home_win' && challenge.match?.home_team.name}
-          {creatorPredictionType === 'away_win' && challenge.match?.away_team.name}
-          {creatorPredictionType === 'draw' && 'Draw'}
+          {creatorLabel}: {getPredictionDisplay(creatorPrediction, challenge.match, 'Unknown')}
         </div>
         <div className="space-y-1.5 mt-2">
           <Button
@@ -874,7 +873,7 @@ function AcceptChallengeForm({
         <Input
           id="stake"
           type="number"
-          placeholder={`Min ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}`}
+          placeholder={`Min ${formatCurrency(challenge.min_opponent_amount, currency)}`}
           value={stakeAmount}
           onChange={(e) => setStakeAmount(e.target.value)}
           min={challenge.min_opponent_amount}
@@ -883,7 +882,7 @@ function AcceptChallengeForm({
         />
         <div className="flex justify-between items-center mt-1">
           <p className="text-xs text-muted-foreground">
-            Min: {formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}
+            Min: {formatCurrency(challenge.min_opponent_amount, currency)}
           </p>
           {stakeAmount && parseFloat(stakeAmount) < challenge.min_opponent_amount && (
             <p className="text-xs text-red-500 font-medium">
@@ -907,7 +906,7 @@ function AcceptChallengeForm({
               className={`h-7 text-xs ${isDisabled ? 'opacity-50' : ''} ${isBelowMinimum ? 'border-red-200 text-red-400' : ''}`}
               onClick={() => setStakeAmount(quickAmount.toString())}
               disabled={isDisabled}
-              title={isBelowMinimum ? `Below minimum of ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}` : ''}
+              title={isBelowMinimum ? `Below minimum of ${formatCurrency(challenge.min_opponent_amount, currency)}` : ''}
             >
               {quickAmount} CR
             </Button>
@@ -939,7 +938,7 @@ function AcceptChallengeForm({
           <p className="text-xs text-red-500 text-center">
             {!stakeAmount 
               ? "Please enter a stake amount" 
-              : `Minimum stake is ${formatCurrency(challenge.min_opponent_amount, wallet?.currency || 'CREDORR')}`
+              : `Minimum stake is ${formatCurrency(challenge.min_opponent_amount, currency)}`
             }
           </p>
         )}
@@ -956,6 +955,9 @@ interface RejectChallengeFormProps {
 }
 
 function RejectChallengeForm({ challenge, onReject, isLoading }: RejectChallengeFormProps) {
+  const isPublicChallenge = isPublicEvent(challenge)
+  const originLabel = getBetOriginLabel(challenge, PUBLIC_EVENT_LABEL)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center space-x-3 p-4 border border-red-200 rounded-lg bg-red-50">
@@ -963,7 +965,7 @@ function RejectChallengeForm({ challenge, onReject, isLoading }: RejectChallenge
         <div>
           <div className="font-medium text-red-900">Reject Challenge</div>
           <div className="text-sm text-red-700">
-            Are you sure you want to reject this challenge from {challenge.creator?.username}?
+            Are you sure you want to reject {isPublicChallenge ? 'this public event?' : `this challenge from ${originLabel}?`}
           </div>
         </div>
       </div>
@@ -1047,8 +1049,9 @@ interface CancelChallengeFormProps {
 }
 
 function CancelChallengeForm({ challenge, onCancel, isLoading }: CancelChallengeFormProps) {
-  const { user } = useAuthStore()
+  const { user, wallet } = useAuthStore()
   const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
+  const currency = wallet?.currency || 'CREDORR'
 
   return (
     <div className="space-y-4">
@@ -1109,7 +1112,7 @@ function CancelChallengeForm({ challenge, onCancel, isLoading }: CancelChallenge
       {userPrediction && (
         <div className="p-3 bg-gray-50 rounded-lg">
           <div className="text-sm text-muted-foreground">Your Stake</div>
-          <div className="font-medium">{formatCurrency(userPrediction.amount, 'CREDORR')}</div>
+          <div className="font-medium">{getAmountDisplay(userPrediction, currency)}</div>
           <div className="text-xs text-green-600">Will be refunded</div>
         </div>
       )}
@@ -1149,8 +1152,9 @@ interface LeaveChallengeFormProps {
 }
 
 function LeaveChallengeForm({ challenge, onLeave, isLoading }: LeaveChallengeFormProps) {
-  const { user } = useAuthStore()
+  const { user, wallet } = useAuthStore()
   const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
+  const currency = wallet?.currency || 'CREDORR'
 
   return (
     <div className="space-y-4">
@@ -1167,7 +1171,7 @@ function LeaveChallengeForm({ challenge, onLeave, isLoading }: LeaveChallengeFor
       {userPrediction && (
         <div className="p-3 bg-gray-50 rounded-lg">
           <div className="text-sm text-muted-foreground">Your Current Stake</div>
-          <div className="font-medium">{formatCurrency(userPrediction.amount, 'CREDORR')}</div>
+          <div className="font-medium">{getAmountDisplay(userPrediction, currency)}</div>
           <div className="text-xs text-green-600">Will be refunded</div>
         </div>
       )}

@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ClientProvider } from "@/components/providers/client-provider";
-import { Web3Provider } from "@/components/providers/web3-provider";
 
 // Using system fonts to avoid runtime font fetch issues during development
 
@@ -20,13 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`antialiased`}>
-        <Web3Provider>
-          <ClientProvider>
-            <AuthProvider>
-              {children}
-            </AuthProvider>
-          </ClientProvider>
-        </Web3Provider>
+        <ClientProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ClientProvider>
       </body>
     </html>
   );

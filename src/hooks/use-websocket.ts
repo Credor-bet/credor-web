@@ -117,6 +117,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   }, [setConnectionStatus, enableNotifications])
 
   const handleError = useCallback((error: string) => {
+    if (!error) return
+    if (error.toLowerCase().includes('fixture not found')) {
+      console.warn('WebSocket server reports missing fixture. Skipping subscription.')
+      return
+    }
     console.error('WebSocket error:', error)
     if (enableErrorToasts) {
       toast.error(`Connection error: ${error}`, {
@@ -165,6 +170,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
   // Subscribe to a match
   const subscribeToMatch = useCallback(async (fixtureId: string): Promise<boolean> => {
+    if (!fixtureId) {
+      console.warn('Cannot subscribe to match: missing fixture ID')
+      return false
+    }
     console.log(`🚀 Attempting to subscribe to fixture: ${fixtureId}`)
     const service = wsService.current
     console.log(`📡 WebSocket connection status: ${service.isConnected ? 'CONNECTED' : 'DISCONNECTED'}`)

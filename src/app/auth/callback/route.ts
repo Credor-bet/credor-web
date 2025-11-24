@@ -103,8 +103,12 @@ export async function GET(request: Request) {
       }
       
       if (profile.is_profile_complete) {
-        // Profile is complete, redirect to dashboard
-        return createAuthRedirect(requestUrl.origin + '/dashboard')
+        // Profile is complete, check if user has sport preferences
+        // Use a service role client to check preferences since RPC uses auth.uid()
+        // For now, redirect to sport-selection and let that page handle the check
+        // (it has better error handling and user experience)
+        // The sport-selection page will redirect to dashboard if preferences exist
+        return createAuthRedirect(requestUrl.origin + '/sport-selection')
       } else {
         // Profile exists but is not complete, redirect to profile completion
         return createAuthRedirect(requestUrl.origin + '/profile-completion')

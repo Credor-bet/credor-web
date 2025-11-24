@@ -8,8 +8,34 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
+        // Figma Design Tokens
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          dark: 'hsl(var(--primary-dark))'
+        },
+        success: 'hsl(var(--success))',
+        destructive: 'hsl(var(--destructive))',
+        danger: 'hsl(var(--danger))',
+        warning: 'hsl(var(--warning))',
+        background: {
+          DEFAULT: 'hsl(var(--background))',
+          light: 'hsl(var(--background-light))',
+          gray: 'hsl(var(--background-gray))'
+        },
+        foreground: {
+          DEFAULT: 'hsl(var(--foreground))',
+          muted: 'hsl(var(--foreground-muted))',
+          placeholder: 'hsl(var(--foreground-placeholder))'
+        },
+        border: {
+          DEFAULT: 'hsl(var(--border))',
+          gray: 'hsl(var(--border-gray))'
+        },
+        accent: {
+          yellow: 'hsl(var(--accent-yellow))',
+          blue: 'hsl(var(--accent-blue))'
+        },
+        // shadcn/ui colors (kept for compatibility)
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
@@ -17,10 +43,6 @@ module.exports = {
         popover: {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
-        },
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
@@ -30,15 +52,6 @@ module.exports = {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))',
         },
-        accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
-        },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
-        },
-        border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
         chart: {
@@ -59,14 +72,47 @@ module.exports = {
           ring: 'hsl(var(--sidebar-ring))',
         },
       },
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-      },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
+        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+        display: ['Rushon Ground', 'DM Sans', 'sans-serif'],
         mono: ['var(--font-geist-mono)', 'monospace'],
+      },
+      fontSize: {
+        xs: ['11px', { lineHeight: '14.322px' }],
+        sm: ['12px', { lineHeight: '15.624px' }],
+        base: ['14px', { lineHeight: '18.228px' }],
+        md: ['15px', { lineHeight: '18.75px' }],
+        lg: ['16px', { lineHeight: '20px' }],
+        xl: ['20px', { lineHeight: '26.04px' }],
+        '2xl': ['30px', { lineHeight: '39px' }],
+        display: ['224px', { lineHeight: '257.688px' }],
+      },
+      fontWeight: {
+        regular: '400',
+        medium: '500',
+        semibold: '600',
+        bold: '700',
+      },
+      borderRadius: {
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        DEFAULT: 'var(--radius)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
+        '2xl': 'var(--radius-2xl)',
+        '3xl': 'var(--radius-3xl)',
+        '4xl': 'var(--radius-4xl)',
+        full: 'var(--radius-full)',
+        logo: 'var(--radius-logo)',
+      },
+      spacing: {
+        xs: '4px',
+        sm: '8px',
+        md: '12px',
+        lg: '16px',
+        xl: '24px',
+        '2xl': '30px',
+        '3xl': '36px',
       },
     },
   },

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuthStore, useBettingStore } from '@/lib/store'
+import { ChallengeService, type Challenge } from '@/lib/challenge-service'
+import type { BetPredictionWithPrivacy } from '@/types/bets'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,9 +24,14 @@ import {
   Users,
   TrendingUp,
   Eye,
-  Share2
+  Share2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { getAmountDisplay, getBetOriginLabel, getPredictionDisplay, isPublicEvent, PUBLIC_EVENT_LABEL } from '@/lib/bet-display'
+import { supabase } from '@/lib/supabase'
+import type { PredictionType } from '@/types/bets'
 
 interface BetWithDetails {
   id: string
@@ -34,6 +41,7 @@ interface BetWithDetails {
   min_opponent_amount: number
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'settled'
   max_participants: number
+  is_system_generated?: boolean
   created_at: string
   updated_at: string
   settled_at: string | null
@@ -69,11 +77,7 @@ interface BetWithDetails {
     username: string
     avatar_url: string | null
   }
-  bet_predictions?: Array<{
-    user_id: string
-    prediction: string
-    amount: number
-  }>
+  bet_predictions?: BetPredictionWithPrivacy[]
 }
 
 export default function BetDetailsPage() {
@@ -84,9 +88,43 @@ export default function BetDetailsPage() {
   const [bet, setBet] = useState<BetWithDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showParticipants, setShowParticipants] = useState(false)
+  const [predictionFilter, setPredictionFilter] = useState<PredictionType | 'all'>('all')
+  const [participantsWithDetails, setParticipantsWithDetails] = useState<Array<{
+    user_id: string
+    username: string
+    avatar_url: string | null
+    prediction: PredictionType | null
+    amount: number | null
+    isPredictionHidden?: boolean
+    isAmountHidden?: boolean
+  }>>([])
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false)
+  const [participantCount, setParticipantCount] = useState(0)
   
   const { user, wallet } = useAuthStore()
-  const { betHistory, refreshBets } = useBettingStore()
+  const currency = wallet?.currency || 'CREDORR'
+  const { betHistory, activeBets, refreshBets } = useBettingStore()
+
+  const adaptChallengeToBet = (challenge: Challenge | null): BetWithDetails | null => {
+    if (!challenge) return null
+    return {
+      ...challenge,
+      matches: challenge.match,
+      creator: challenge.creator,
+      opponent: challenge.opponent,
+      bet_predictions: challenge.bet_predictions
+    } as BetWithDetails
+  }
+
+  const findBetInCollections = (collections: Array<BetWithDetails[] | undefined>) => {
+    for (const collection of collections) {
+      if (!collection) continue
+      const found = collection.find(b => b.id === betId)
+      if (found) return found
+    }
+    return null
+  }
 
   useEffect(() => {
     const loadBetDetails = async () => {
@@ -94,28 +132,37 @@ export default function BetDetailsPage() {
       setError(null)
 
       try {
-        // First try to find the bet in our cached history
-        if (betHistory && betHistory.length > 0) {
-          const foundBet = betHistory.find(b => b.id === betId)
-          if (foundBet) {
-            setBet(foundBet)
+        // First try to find the bet in our cached data
+        const cachedBet = findBetInCollections([activeBets, betHistory])
+        if (cachedBet) {
+          setBet(cachedBet)
+          setIsLoading(false)
+          return
+        }
+
+        // Refresh bets to update store
+        await refreshBets()
+
+        const refreshedState = useBettingStore.getState()
+        const refreshedBet = findBetInCollections([refreshedState.activeBets, refreshedState.betHistory])
+        if (refreshedBet) {
+          setBet(refreshedBet as BetWithDetails)
+          setIsLoading(false)
+          return
+        }
+
+        // Final fallback: fetch directly from API
+        const fetchedBet = await ChallengeService.getChallengeById(betId)
+        if (fetchedBet) {
+          const adapted = adaptChallengeToBet(fetchedBet)
+          if (adapted) {
+            setBet(adapted)
             setIsLoading(false)
             return
           }
         }
 
-        // If not found in cache, refresh bets and try again
-        await refreshBets()
-        
-        // Check again after refresh
-        if (betHistory) {
-          const foundBet = betHistory.find(b => b.id === betId)
-          if (foundBet) {
-            setBet(foundBet)
-          } else {
-            setError('Bet not found')
-          }
-        }
+        setError('Bet not found')
       } catch (err) {
         console.error('Error loading bet details:', err)
         setError('Failed to load bet details')
@@ -127,7 +174,7 @@ export default function BetDetailsPage() {
     if (betId && user) {
       loadBetDetails()
     }
-  }, [betId, user, betHistory, refreshBets])
+  }, [betId, user, betHistory, activeBets, refreshBets])
 
   const getBetStatusIcon = (status: string) => {
     switch (status) {
@@ -157,19 +204,6 @@ export default function BetDetailsPage() {
         return 'bg-blue-100 text-blue-800'
       default:
         return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getPredictionText = (prediction: string) => {
-    switch (prediction) {
-      case 'home_win':
-        return 'Home Win'
-      case 'away_win':
-        return 'Away Win'
-      case 'draw':
-        return 'Draw'
-      default:
-        return prediction
     }
   }
 
@@ -203,7 +237,110 @@ export default function BetDetailsPage() {
     if (!bet?.bet_predictions || bet.bet_predictions.length === 0) {
       return bet?.min_opponent_amount || 0
     }
-    return bet.bet_predictions.reduce((total, prediction) => total + prediction.amount, 0)
+    return bet.bet_predictions.reduce((total, prediction) => total + (prediction.amount ?? 0), 0)
+  }
+
+  const publicEventBet = bet ? isPublicEvent(bet) : false
+
+  // Fetch participant count when bet loads (for public bets)
+  useEffect(() => {
+    const fetchParticipantCount = async () => {
+      if (!bet?.id || !publicEventBet) {
+        setParticipantCount(0)
+        return
+      }
+
+      try {
+        const { count, error } = await supabase
+          .from('bet_predictions')
+          .select('*', { count: 'exact', head: true })
+          .eq('bet_id', bet.id)
+
+        if (error) {
+          console.error('Error fetching participant count:', error)
+          setParticipantCount(bet?.bet_predictions?.length ?? 0)
+        } else {
+          setParticipantCount(count ?? 0)
+        }
+      } catch (error) {
+        console.error('Error fetching participant count:', error)
+        setParticipantCount(bet?.bet_predictions?.length ?? 0)
+      }
+    }
+
+    fetchParticipantCount()
+  }, [bet?.id, publicEventBet, bet?.bet_predictions?.length])
+
+  // Fetch participant details when participants list is opened
+  useEffect(() => {
+    const loadParticipantDetails = async () => {
+      if (!bet?.bet_predictions || bet.bet_predictions.length === 0) {
+        setParticipantsWithDetails([])
+        return
+      }
+
+      setIsLoadingParticipants(true)
+      try {
+        // Use bet_predictions from the bet object (same approach as TrendingBetModal)
+        // These are already loaded and privacy-filtered appropriately
+        const userIds = bet.bet_predictions.map(p => p.user_id)
+        
+        // Fetch user details for all participants
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, username, avatar_url')
+          .in('id', userIds)
+
+        if (userError) {
+          console.error('Error fetching participant details:', userError)
+          setParticipantsWithDetails([])
+          return
+        }
+
+        // Map predictions with user details
+        // Privacy flags are already applied in bet.bet_predictions (BetPredictionWithPrivacy)
+        const participants = bet.bet_predictions.map(prediction => {
+          const userInfo = userData?.find(u => u.id === prediction.user_id)
+          return {
+            user_id: prediction.user_id,
+            username: userInfo?.username || 'Unknown User',
+            avatar_url: userInfo?.avatar_url || null,
+            prediction: prediction.prediction,
+            amount: prediction.amount,
+            isPredictionHidden: prediction.isPredictionHidden,
+            isAmountHidden: prediction.isAmountHidden,
+          }
+        })
+
+        setParticipantsWithDetails(participants)
+        // Update participant count with actual loaded count
+        setParticipantCount(participants.length)
+      } catch (error) {
+        console.error('Error loading participant details:', error)
+        setParticipantsWithDetails([])
+      } finally {
+        setIsLoadingParticipants(false)
+      }
+    }
+
+    if (showParticipants && publicEventBet && bet?.bet_predictions) {
+      loadParticipantDetails()
+    }
+  }, [showParticipants, publicEventBet, bet?.bet_predictions])
+
+  // Filter participants by prediction type
+  const filteredParticipants = participantsWithDetails.filter(participant => {
+    if (predictionFilter === 'all') return true
+    if (participant.isPredictionHidden) return false
+    return participant.prediction === predictionFilter
+  })
+
+  // Count participants by prediction type
+  const getPredictionCount = (predType: PredictionType | 'all'): number => {
+    if (predType === 'all') return participantsWithDetails.length
+    return participantsWithDetails.filter(p => 
+      !p.isPredictionHidden && p.prediction === predType
+    ).length
   }
 
   if (isLoading) {
@@ -249,6 +386,18 @@ export default function BetDetailsPage() {
   const userPrediction = bet.bet_predictions?.find(p => p.user_id === user?.id)
   const opponentPrediction = bet.bet_predictions?.find(pred => pred.user_id !== user?.id)
   const betResult = getBetResult()
+  const originLabel = getBetOriginLabel(bet, PUBLIC_EVENT_LABEL)
+  const matchResultPrediction = bet.matches?.match_result
+    ? { user_id: 'result', prediction: bet.matches.match_result as BetPredictionWithPrivacy['prediction'], amount: null }
+    : undefined
+  const matchResultLabel = getPredictionDisplay(matchResultPrediction, bet.matches, 'Unknown result')
+  const userPredictionDisplay = getPredictionDisplay(userPrediction, bet.matches, 'No prediction')
+  const userAmountDisplay = getAmountDisplay(userPrediction, currency)
+  const opponentPredictionDisplay = getPredictionDisplay(opponentPrediction, bet.matches, 'No prediction')
+  const opponentAmountDisplay = getAmountDisplay(opponentPrediction, currency)
+  const opponentName = bet.creator_id === user?.id
+    ? bet.opponent?.username || 'Waiting for opponent'
+    : originLabel
 
   return (
     <div className="p-4 md:p-6">
@@ -290,7 +439,7 @@ export default function BetDetailsPage() {
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold">
-                  {formatCurrency(getTotalStake(), wallet?.currency || 'CREDORR')}
+                  {formatCurrency(getTotalStake(), currency)}
                 </div>
                 <p className="text-blue-100 text-sm">Total Stake</p>
               </div>
@@ -387,7 +536,7 @@ export default function BetDetailsPage() {
                       <span className="font-semibold text-gray-900">Match Result</span>
                     </div>
                     <Badge variant="outline" className="bg-white text-blue-700 border-blue-200">
-                      {getPredictionText(bet.matches.match_result)}
+                      {matchResultLabel}
                     </Badge>
                   </div>
                 </div>
@@ -400,7 +549,121 @@ export default function BetDetailsPage() {
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Participants & Predictions</h3>
               
-              <div className="grid md:grid-cols-2 gap-4">
+              {publicEventBet ? (
+                // Public bet: Show expandable participants list
+                <div className="space-y-4">
+                  {/* Participants List - Expandable */}
+                  {participantCount > 0 && (
+                    <div className="border rounded-lg">
+                      <button
+                        onClick={() => setShowParticipants(!showParticipants)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Users className="h-5 w-5 text-muted-foreground" />
+                          <span className="font-medium">View All Participants</span>
+                          <Badge variant="outline">{participantCount}</Badge>
+                        </div>
+                        {showParticipants ? (
+                          <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </button>
+
+                      {showParticipants && (
+                        <div className="p-4 border-t space-y-4">
+                          {/* Prediction Filter Buttons */}
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant={predictionFilter === 'all' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setPredictionFilter('all')}
+                            >
+                              All ({getPredictionCount('all')})
+                            </Button>
+                            <Button
+                              variant={predictionFilter === 'home_win' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setPredictionFilter('home_win')}
+                            >
+                              {bet.matches?.home_team?.name || 'Home'} ({getPredictionCount('home_win')})
+                            </Button>
+                            <Button
+                              variant={predictionFilter === 'draw' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setPredictionFilter('draw')}
+                            >
+                              Draw ({getPredictionCount('draw')})
+                            </Button>
+                            <Button
+                              variant={predictionFilter === 'away_win' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setPredictionFilter('away_win')}
+                            >
+                              {bet.matches?.away_team?.name || 'Away'} ({getPredictionCount('away_win')})
+                            </Button>
+                          </div>
+
+                          {/* Participants List */}
+                          {isLoadingParticipants ? (
+                            <div className="text-center text-muted-foreground py-4">
+                              Loading participants...
+                            </div>
+                          ) : filteredParticipants.length === 0 ? (
+                            <div className="text-center text-muted-foreground py-4">
+                              No participants found for this filter.
+                            </div>
+                          ) : (
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                              {filteredParticipants.map((participant) => (
+                                <div
+                                  key={participant.user_id}
+                                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                                >
+                                  <div className="flex items-center space-x-3 flex-1">
+                                    <Avatar className="h-8 w-8">
+                                      <AvatarImage src={participant.avatar_url || ''} />
+                                      <AvatarFallback>
+                                        {participant.username.charAt(0).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-sm truncate">
+                                        {participant.username}
+                                        {participant.user_id === user?.id && ' (You)'}
+                                      </p>
+                                      <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                                        <span>
+                                          Prediction: {getPredictionDisplay(
+                                            participant as any,
+                                            bet.matches,
+                                            'Not set'
+                                          )}
+                                        </span>
+                                        <span>•</span>
+                                        <span>
+                                          Amount: {getAmountDisplay(
+                                            participant as any,
+                                            currency,
+                                            '—'
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Private bet: Show 2-column layout
+                <div className="grid md:grid-cols-2 gap-4">
                 {/* Current User */}
                 <Card className="border-2 border-blue-200 bg-blue-50">
                   <CardContent className="p-4">
@@ -426,16 +689,13 @@ export default function BetDetailsPage() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Prediction:</span>
                         <Badge variant="outline" className="bg-white">
-                          {userPrediction?.prediction 
-                            ? getPredictionText(userPrediction.prediction)
-                            : 'Not set'
-                          }
+                          {userPredictionDisplay}
                         </Badge>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Amount:</span>
                         <span className="font-semibold">
-                          {formatCurrency(userPrediction?.amount || 0, wallet?.currency || 'CREDORR')}
+                          {userAmountDisplay}
                         </span>
                       </div>
                     </div>
@@ -448,26 +708,26 @@ export default function BetDetailsPage() {
                 }`}>
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3 mb-3">
-                      <Avatar className="h-10 w-10 border-2 border-gray-300">
-                        <AvatarImage src={
-                          (bet.creator_id === user?.id ? bet.opponent?.avatar_url : bet.creator?.avatar_url) || ''
-                        } />
-                        <AvatarFallback className="bg-gray-600 text-white">
-                          {(bet.creator_id === user?.id 
-                            ? bet.opponent?.username?.charAt(0).toUpperCase()
-                            : bet.creator?.username?.charAt(0).toUpperCase()
-                          ) || 'O'}
-                        </AvatarFallback>
-                      </Avatar>
+                      {publicEventBet && bet.creator_id !== user?.id ? (
+                        <div className="h-10 w-10 border-2 border-gray-300 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs font-semibold flex items-center justify-center">
+                          {PUBLIC_EVENT_LABEL.slice(0, 1)}
+                        </div>
+                      ) : (
+                        <Avatar className="h-10 w-10 border-2 border-gray-300">
+                          <AvatarImage src={
+                            (bet.creator_id === user?.id ? bet.opponent?.avatar_url : bet.creator?.avatar_url) || ''
+                          } />
+                          <AvatarFallback className="bg-gray-600 text-white">
+                            {opponentName?.charAt(0).toUpperCase() || 'O'}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                       <div className="flex-1">
                         <p className="font-semibold text-gray-900">
-                          {bet.creator_id === user?.id 
-                            ? bet.opponent?.username || 'Waiting for opponent'
-                            : bet.creator?.username || 'Unknown'
-                          }
+                          {opponentName}
                         </p>
                         <p className="text-sm text-gray-600">
-                          {bet.creator_id === user?.id ? 'Opponent' : 'Creator'}
+                          {bet.creator_id === user?.id ? 'Opponent' : (publicEventBet ? PUBLIC_EVENT_LABEL : 'Creator')}
                         </p>
                       </div>
                       {betResult === 'lose' && (
@@ -479,22 +739,20 @@ export default function BetDetailsPage() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Prediction:</span>
                         <Badge variant="outline" className="bg-white">
-                          {opponentPrediction?.prediction 
-                            ? getPredictionText(opponentPrediction.prediction)
-                            : 'Not set'
-                          }
+                          {opponentPredictionDisplay}
                         </Badge>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-600">Amount:</span>
                         <span className="font-semibold">
-                          {formatCurrency(opponentPrediction?.amount || 0, wallet?.currency || 'CREDORR')}
+                          {opponentAmountDisplay}
                         </span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
+              )}
             </div>
 
             <Separator className="my-6" />

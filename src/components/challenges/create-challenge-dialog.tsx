@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore, useFriendsStore } from '@/lib/store'
-import { ChallengeService, type Sport, type Team, type Match, type PredictionType, type ChallengeType } from '@/lib/challenge-service'
+import { ChallengeService, type Sport, type Team, type Match, type PredictionType } from '@/lib/challenge-service'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,7 +48,6 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
   const [isLoading, setIsLoading] = useState(false)
   
   // Form data
-  const [challengeType, setChallengeType] = useState<ChallengeType>('friend')
   const [selectedOpponentId, setSelectedOpponentId] = useState(defaultOpponentId || '')
   const [selectedSport, setSelectedSport] = useState<Sport | null>(null)
   const [teamSearchTerm, setTeamSearchTerm] = useState('')
@@ -141,34 +140,32 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
       const progressToast = toast.loading('Creating challenge...')
       
       console.log('Creating challenge with params:', {
-        opponentId: challengeType === 'friend' ? selectedOpponentId : undefined,
+        opponentId: selectedOpponentId,
         matchId: selectedMatch.id,
         amount: parseFloat(amount),
         minOpponentAmount: parseFloat(minOpponentAmount),
-        prediction,
-        type: challengeType
+        prediction
       })
       
       const challengeId = await ChallengeService.createChallenge({
-        opponentId: challengeType === 'friend' ? selectedOpponentId : undefined,
+        opponentId: selectedOpponentId,
         matchId: selectedMatch.id,
         amount: parseFloat(amount),
         minOpponentAmount: parseFloat(minOpponentAmount),
-        prediction,
-        type: challengeType
+        prediction
       })
 
       // Dismiss progress toast and show success
       toast.dismiss(progressToast)
       
-      const opponentName = challengeType === 'friend' && selectedOpponentId 
+      const opponentName = selectedOpponentId 
         ? friends.find(f => f.id === selectedOpponentId)?.username || 'your friend'
-        : 'anyone'
+        : 'your friend'
       
       toast.success(`Challenge created successfully! You staked ${formatCurrency(parseFloat(amount), wallet?.currency || 'CREDORR')} on ${
         prediction === 'home_win' ? selectedMatch.home_team.name :
         prediction === 'away_win' ? selectedMatch.away_team.name : 'Draw'
-      }. ${challengeType === 'friend' ? `${opponentName} will be notified.` : 'It\'s now available for others to accept.'}`, {
+      }. ${opponentName} will be notified.`, {
         duration: 6000
       })
       
@@ -209,7 +206,6 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
 
   const resetForm = () => {
     setStep('opponent')
-    setChallengeType('friend')
     setSelectedOpponentId(defaultOpponentId || '')
     setSelectedSport(null)
     setTeamSearchTerm('')
@@ -226,60 +222,37 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
   const renderOpponentStep = () => (
     <div className="space-y-4">
       <div className="text-center">
-        <Trophy className="h-12 w-12 text-green-600 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold">Choose Challenge Type</h3>
-        <p className="text-sm text-muted-foreground">Who would you like to challenge?</p>
+        <Users className="h-12 w-12 text-green-600 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold">Challenge a Friend</h3>
+        <p className="text-sm text-muted-foreground">Pick a friend to send a direct challenge.</p>
       </div>
       
       <div className="space-y-3">
-        <Button
-          variant={challengeType === 'friend' ? 'default' : 'outline'}
-          className="w-full justify-start h-auto p-4"
-          onClick={() => setChallengeType('friend')}
-        >
-          <Users className="h-5 w-5 mr-3" />
-          <div className="text-left">
-            <div className="font-medium">Challenge a Friend</div>
-            <div className="text-xs text-muted-foreground">Send a direct challenge</div>
-          </div>
-        </Button>
-        
-        <Button
-          variant={challengeType === 'public' ? 'default' : 'outline'}
-          className="w-full justify-start h-auto p-4"
-          onClick={() => setChallengeType('public')}
-        >
-          <Target className="h-5 w-5 mr-3" />
-          <div className="text-left">
-            <div className="font-medium">Public Challenge</div>
-            <div className="text-xs text-muted-foreground">Open to anyone</div>
-          </div>
-        </Button>
+        <Label>Select Friend</Label>
+        <Select value={selectedOpponentId} onValueChange={setSelectedOpponentId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Choose a friend to challenge" />
+          </SelectTrigger>
+          <SelectContent>
+            {friends.map((friend) => (
+              <SelectItem key={friend.id} value={friend.id}>
+                <div className="flex items-center">
+                  <Avatar className="h-6 w-6 mr-2">
+                    <AvatarImage src={friend.avatar_url || ''} />
+                    <AvatarFallback>{friend.username[0]}</AvatarFallback>
+                  </Avatar>
+                  {friend.username}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {friends.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            You don't have any friends yet. Add friends to send them challenges.
+          </p>
+        )}
       </div>
-
-      {challengeType === 'friend' && (
-        <div className="space-y-3">
-          <Label>Select Friend</Label>
-          <Select value={selectedOpponentId} onValueChange={setSelectedOpponentId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose a friend to challenge" />
-            </SelectTrigger>
-            <SelectContent>
-              {friends.map((friend) => (
-                <SelectItem key={friend.id} value={friend.id}>
-                  <div className="flex items-center">
-                    <Avatar className="h-6 w-6 mr-2">
-                      <AvatarImage src={friend.avatar_url || ''} />
-                      <AvatarFallback>{friend.username[0]}</AvatarFallback>
-                    </Avatar>
-                    {friend.username}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
     </div>
   )
 
@@ -697,14 +670,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Opponent */}
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Type:</span>
-            <span className="font-medium">
-              {challengeType === 'friend' ? 'Friend Challenge' : 'Public Challenge'}
-            </span>
-          </div>
-
-          {challengeType === 'friend' && selectedOpponentId && (
+          {selectedOpponentId && (
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Opponent:</span>
               <div className="flex items-center">
@@ -718,7 +684,9 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                       </Avatar>
                       <span className="font-medium">{friend.username}</span>
                     </>
-                  ) : null
+                  ) : (
+                    <span className="font-medium">Selected friend</span>
+                  )
                 })()}
               </div>
             </div>
@@ -805,7 +773,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
 
   const getStepTitle = () => {
     switch (step) {
-      case 'opponent': return 'Challenge Type'
+      case 'opponent': return 'Select Friend'
       case 'sport': return 'Select Sport'
       case 'fixture': return 'Choose Fixture'
       case 'prediction': return 'Your Prediction'
@@ -818,7 +786,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
   const canProceed = () => {
     switch (step) {
       case 'opponent':
-        return challengeType === 'public' || (challengeType === 'friend' && selectedOpponentId)
+        return Boolean(selectedOpponentId)
       case 'sport':
         return selectedSport !== null
       case 'fixture':

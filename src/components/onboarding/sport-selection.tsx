@@ -64,15 +64,10 @@ export function SportSelection({ onComplete }: SportSelectionProps) {
   }
 
   async function handleSave() {
-    if (selectedSports.size === 0) {
-      toast.error('Please select at least one sport')
-      return
-    }
-
     try {
       setSaving(true)
       
-      // Update all preferences
+      // Update all preferences (even if none selected - sets all to false)
       const updates = sports.map(sport => ({
         sportId: sport.sport_id,
         isInterested: selectedSports.has(sport.sport_id),
@@ -86,6 +81,23 @@ export function SportSelection({ onComplete }: SportSelectionProps) {
     } catch (error) {
       console.error('Error saving preferences:', error)
       toast.error('Failed to save preferences. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSkip() {
+    try {
+      setSaving(true)
+      
+      // Call the skip function to mark preferences as set
+      await sportsService.skipSportPreferences()
+      
+      toast.success('Skipped sport selection')
+      onComplete?.()
+    } catch (error) {
+      console.error('Error skipping preferences:', error)
+      toast.error('Failed to skip. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -204,18 +216,11 @@ export function SportSelection({ onComplete }: SportSelectionProps) {
           })}
         </div>
 
-        {/* Error Message */}
-        {selectedCount === 0 && (
-          <p className="text-center text-red-600 text-sm">
-            Please select at least one sport
-          </p>
-        )}
-
-        {/* Continue Button */}
-        <div className="flex justify-center pt-4">
+        {/* Continue and Skip Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
           <Button
             onClick={handleSave}
-            disabled={saving || selectedCount === 0}
+            disabled={saving}
             className="w-full sm:w-auto px-8"
             size="lg"
           >
@@ -227,6 +232,17 @@ export function SportSelection({ onComplete }: SportSelectionProps) {
             ) : (
               'Continue'
             )}
+          </Button>
+          
+          {/* Skip Button - no color or border */}
+          <Button
+            onClick={handleSkip}
+            disabled={saving}
+            variant="ghost"
+            className="w-full sm:w-auto px-8 text-muted-foreground hover:text-foreground"
+            size="lg"
+          >
+            Skip
           </Button>
         </div>
       </CardContent>

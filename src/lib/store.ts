@@ -27,6 +27,7 @@ interface User {
   created_at: string
   updated_at: string
   is_profile_complete: boolean
+  sports_preferences_set?: boolean
 }
 
 interface Wallet {

@@ -75,8 +75,48 @@ export interface Challenge {
     avatar_url?: string
   }
   bet_predictions?: BetPredictionWithPrivacy[]
+  isParticipant?: boolean
+  participant_count?: number
+  total_wagered?: number
+  activity_score?: number
 }
 export type ChallengeType = 'friend' | 'public'
+
+type ParticipantSource = {
+  creator_id?: string | null
+  opponent_id?: string | null
+  bet_predictions?: BetPredictionWithPrivacy[]
+}
+
+const withParticipantFlag = <T extends ParticipantSource>(
+  entity: T,
+  viewerId: string | null
+) => {
+  if (!entity) {
+    return entity
+  }
+
+  if (!viewerId) {
+    return { ...entity, isParticipant: false }
+  }
+
+  const isCreator = entity.creator_id === viewerId
+  const isOpponent = entity.opponent_id === viewerId
+  const hasPrediction = entity.bet_predictions?.some(pred => pred.user_id === viewerId)
+  // Only count opponent as participant if they've accepted (status is not pending)
+  // For private bets, opponent should only be considered a participant after accepting
+  const status = (entity as any).status
+  const isParticipant = Boolean(
+    isCreator || 
+    hasPrediction || 
+    (isOpponent && status !== 'pending') // Only count as participant if accepted
+  )
+
+  return {
+    ...entity,
+    isParticipant,
+  }
+}
 
 // Challenge Service class
 export class ChallengeService {
@@ -401,7 +441,11 @@ export class ChallengeService {
 
       const viewerId = useAuthStore.getState().user?.id ?? null
       const [challenge] = await applyPrivacyRulesToBets(data ? [data] : [], viewerId)
-      return challenge || null
+      if (!challenge) {
+        return null
+      }
+
+      return withParticipantFlag(challenge, viewerId) as Challenge
     } catch (error) {
       console.error('Error in getChallengeById:', error)
       return null
@@ -445,7 +489,7 @@ export class ChallengeService {
 
       const viewerId = useAuthStore.getState().user?.id ?? null
       const challenges = await applyPrivacyRulesToBets(data || [], viewerId)
-      return challenges
+      return (challenges || []).map(challenge => withParticipantFlag(challenge, viewerId) as Challenge)
     } catch (error) {
       console.error('Error in getUserChallenges:', error)
       throw error
@@ -547,7 +591,8 @@ export class ChallengeService {
       
       let betsWithPrivacy: Challenge[] = []
       if (betsData && betsData.length > 0) {
-        betsWithPrivacy = await applyPrivacyRulesToBets(betsData, viewerId)
+        const sanitizedBets = await applyPrivacyRulesToBets(betsData, viewerId)
+        betsWithPrivacy = (sanitizedBets || []).map(bet => withParticipantFlag(bet, viewerId) as Challenge)
       }
 
       if (!betsWithPrivacy || betsWithPrivacy.length === 0) {
@@ -583,9 +628,10 @@ export class ChallengeService {
         }
 
         const sanitizedFallback = await applyPrivacyRulesToBets(fallbackBets, viewerId)
+        const annotatedFallback = (sanitizedFallback || []).map(bet => withParticipantFlag(bet, viewerId) as Challenge)
 
         // Sort by participant count from bet_predictions
-        const sortedFallback = sanitizedFallback.sort((a: any, b: any) => {
+        const sortedFallback = annotatedFallback.sort((a: any, b: any) => {
           const aParticipants = a.bet_predictions?.length || 0
           const bParticipants = b.bet_predictions?.length || 0
           return bParticipants - aParticipants

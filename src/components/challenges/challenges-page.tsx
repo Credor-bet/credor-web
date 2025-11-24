@@ -31,7 +31,7 @@ import { LiveScoreTest } from '@/components/debug/live-score-test'
 import { ServerDiagnostic } from '@/components/debug/server-diagnostic'
 import { ServerStatusCard } from '@/components/debug/server-status-card'
 import { MatchDebug } from '@/components/debug/match-debug'
-import { getBetOriginLabel } from '@/lib/bet-display'
+import { getBetOriginLabel, isPublicEvent } from '@/lib/bet-display'
 
 export function ChallengesPage() {
   const [activeTab, setActiveTab] = useState('pending')
@@ -71,16 +71,21 @@ export function ChallengesPage() {
     creator: bet.creator,
     opponent: bet.opponent,
     match: bet.matches,
-    bet_predictions: bet.bet_predictions
+    bet_predictions: bet.bet_predictions,
+    isParticipant: bet.isParticipant
   })) as Challenge[]
 
   const pendingChallenges = currentChallenges.filter(c => {
     const currentStatus = getCurrentMatchStatus(c)
+    const userParticipant = typeof c.isParticipant === 'boolean'
+      ? c.isParticipant
+      : c.bet_predictions?.some(prediction => prediction.user_id === user?.id) ?? false
     return c.status === 'pending' && 
            currentStatus === 'scheduled' && // Only show if match hasn't started yet
            (
              c.creator_id === user?.id || // Show bets created by the user
-             c.opponent_id === user?.id   // Show bets directed at the user
+             c.opponent_id === user?.id ||   // Show bets directed at the user
+             (isPublicEvent(c) && userParticipant)
            )
   })
   
@@ -90,13 +95,20 @@ export function ChallengesPage() {
                     currentStatus !== 'cancelled' &&
                     currentStatus !== 'completed' &&
                     currentStatus !== 'finished' // Also exclude any 'finished' status
+    const userParticipant = typeof c.isParticipant === 'boolean'
+      ? c.isParticipant
+      : c.bet_predictions?.some(prediction => prediction.user_id === user?.id) ?? false
     
     // Debug logging for filtering (development only)
     if (process.env.NODE_ENV === 'development' && c.status === 'accepted' && !isActive) {
       console.log(`🚫 Filtered out challenge ${c.id}: status="${currentStatus}" (DB: ${c.match?.status})`)
     }
     
-    return isActive
+    return isActive && (
+      c.creator_id === user?.id ||
+      c.opponent_id === user?.id ||
+      (isPublicEvent(c) && userParticipant)
+    )
   })
 
   useEffect(() => {

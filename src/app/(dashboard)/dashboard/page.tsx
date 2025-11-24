@@ -161,6 +161,9 @@ export default function DashboardPage() {
 
   const trendingIsPublicEvent = trendingBet ? isPublicEvent(trendingBet) : false
   const trendingOriginLabel = trendingBet ? getBetOriginLabel(trendingBet, PUBLIC_EVENT_LABEL) : ''
+  const trendingIsParticipant = trendingBet
+    ? (trendingBet.isParticipant ?? trendingBet.bet_predictions?.some(pred => pred.user_id === user?.id))
+    : false
 
   return (
     <div className="md:ml-64 p-4 md:p-6 space-y-6">
@@ -291,6 +294,11 @@ export default function DashboardPage() {
                             </Avatar>
                             <span className="text-muted-foreground">by {trendingOriginLabel}</span>
                           </>
+                        )}
+                        {trendingIsParticipant && (
+                          <Badge variant="outline" className="text-[10px]">
+                            Joined
+                          </Badge>
                         )}
                       </div>
                       <div className="flex items-center space-x-1">

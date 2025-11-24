@@ -33,9 +33,10 @@ interface ChallengeCardProps {
   challenge: Challenge
   variant?: 'default' | 'compact'
   showActions?: boolean
+  onParticipationChange?: (isParticipant: boolean) => void
 }
 
-export function ChallengeCard({ challenge, variant = 'default', showActions = true }: ChallengeCardProps) {
+export function ChallengeCard({ challenge, variant = 'default', showActions = true, onParticipationChange }: ChallengeCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [showAcceptDialog, setShowAcceptDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -62,22 +63,39 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
   // Determine user's role in the challenge
   const isCreator = challenge.creator_id === user?.id
   const isOpponent = challenge.opponent_id === user?.id
-  const isParticipant = isCreator || isOpponent
-  const canAccept = !isCreator && challenge.status === 'pending' && 
-    (challenge.opponent_id === null || challenge.opponent_id === user?.id)
-  const canReject = !isCreator && challenge.status === 'pending' && 
+  const hasPrediction = challenge.bet_predictions?.some(prediction => prediction.user_id === user?.id)
+  const normalizedParticipant = challenge.isParticipant ?? false
+  // Only count opponent as participant if they've accepted (status is not pending)
+  const isParticipant = Boolean(
+    normalizedParticipant || 
+    isCreator || 
+    hasPrediction || 
+    (isOpponent && challenge.status !== 'pending') // Only count as participant if accepted
+  )
+  const canAccept = !isParticipant &&
+    !isCreator &&
+    challenge.status === 'pending' &&
+    (publicEvent || challenge.opponent_id === null || challenge.opponent_id === user?.id)
+  const canReject = !publicEvent &&
+    !isParticipant &&
+    !isCreator &&
+    challenge.status === 'pending' &&
     (challenge.opponent_id === null || challenge.opponent_id === user?.id)
   // For 1v1 challenges, only show cancel (which works for both pending and accepted)
   // For public challenges, show appropriate action based on role and status
   const isOneVsOne = challenge.max_participants === 2 || challenge.opponent_id !== null
-  const canCancel = isParticipant && (isOneVsOne ? 
+  const canCancel = isParticipant && (isOneVsOne ?
     // For 1v1: creators can cancel pending/accepted, opponents can only cancel accepted (not pending - they should reject instead)
     (isCreator ? ['pending', 'accepted'].includes(challenge.status) : challenge.status === 'accepted')
     : 
     // For public: only creators can cancel pending challenges
     isCreator && challenge.status === 'pending'
   )
-  const canLeave = isParticipant && !isOneVsOne && challenge.status === 'accepted'
+  const canLeave = isParticipant && (
+    publicEvent
+      ? ['pending', 'accepted'].includes(challenge.status)
+      : (!isOneVsOne && challenge.status === 'accepted')
+  )
 
   // Get user's prediction and stake
   const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
@@ -149,6 +167,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       })
       
       setShowAcceptDialog(false)
+      onParticipationChange?.(true)
     } catch (error) {
       console.error('Error accepting challenge:', error)
       
@@ -186,6 +205,10 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
         }
         else if (error.message.includes('Prediction must differ from creator')) {
           toast.error('You must choose a different prediction than the creator.')
+        }
+        else if (error.message.includes('duplicate key value') || error.message.includes('already joined')) {
+          toast.info('You have already joined this bet.')
+          onParticipationChange?.(true)
         }
         // Legacy error handling
         else if (error.message.includes('Insufficient funds')) {
@@ -275,6 +298,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       })
       
       setShowCancelDialog(false)
+      onParticipationChange?.(false)
     } catch (error) {
       console.error('Error canceling challenge:', error)
       
@@ -338,6 +362,7 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       })
       
       setShowLeaveDialog(false)
+      onParticipationChange?.(false)
     } catch (error) {
       console.error('Error leaving challenge:', error)
       
@@ -543,9 +568,16 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
             </div>
           </div>
           
-          <Badge className={getStatusColor(challenge.status)}>
-            {getStatusText(challenge.status)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={getStatusColor(challenge.status)}>
+              {getStatusText(challenge.status)}
+            </Badge>
+            {isParticipant && (
+              <Badge variant="outline" className="text-xs">
+                Joined
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Match Information */}
@@ -609,6 +641,11 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
             <div className="text-sm text-blue-600">
               {getAmountDisplay(userPrediction, currency)}
             </div>
+            {publicEvent && (
+              <p className="text-xs text-muted-foreground mt-2">
+                To adjust your stake, leave this bet first and join again with a new amount.
+              </p>
+            )}
           </div>
         )}
 

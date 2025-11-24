@@ -44,6 +44,7 @@ interface Bet {
   status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'settled'
   max_participants: number
   is_system_generated?: boolean
+  isParticipant?: boolean
   created_at: string
   updated_at: string
   settled_at: string | null
@@ -292,27 +293,52 @@ export const useBettingStore = create<BettingStore>((set) => ({
 
        const request = (async () => {
          try {
-           const { data: userBets, error } = await supabase
-             .from('bets')
-             .select('*')
-             .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
-             .order('created_at', { ascending: false })
-           
-           if (error) {
-             console.error('Error fetching bets:', error)
-             set({ activeBets: [], betHistory: [] })
-             return
-           }
+          const { data: userBets, error } = await supabase
+            .from('bets')
+            .select('*')
+            .or(`creator_id.eq.${user.id},opponent_id.eq.${user.id}`)
+            .order('created_at', { ascending: false })
+          
+          if (error) {
+            console.error('Error fetching bets:', error)
+            set({ activeBets: [], betHistory: [] })
+            return
+          }
 
-           if (!userBets || userBets.length === 0) {
-             set({ activeBets: [], betHistory: [] })
-             return
-           }
+          const directBetIds = userBets?.map(bet => bet.id) ?? []
 
-           // Now let's get the detailed data for the bets we found
-           const betIds = userBets.map(bet => bet.id)
+          // Fetch all bets where user has a prediction (includes public bets)
+          const { data: participantRows, error: participantError } = await supabase
+            .from('bet_predictions')
+            .select('bet_id')
+            .eq('user_id', user.id)
+
+          if (participantError) {
+            console.error('Error fetching participant bets:', participantError)
+          }
+
+          const participantBetIds = participantRows?.map(row => row.bet_id) ?? []
+          const allBetIds = Array.from(new Set([...directBetIds, ...participantBetIds]))
+          
+          // Debug logging to help identify missing bets
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📊 Bet refresh debug:', {
+              directBetCount: directBetIds.length,
+              participantBetCount: participantBetIds.length,
+              totalBetIds: allBetIds.length,
+              directBetIds: directBetIds.slice(0, 5), // First 5 for debugging
+              participantBetIds: participantBetIds.slice(0, 5), // First 5 for debugging
+            })
+          }
+          
+          if (allBetIds.length === 0) {
+            set({ activeBets: [], betHistory: [] })
+            return
+          }
            
-          const { data: detailedBets, error: detailedError } = await supabase
+          // Query bets - use a union approach to ensure RLS allows access
+          // First get direct bets (creator/opponent)
+          const { data: directDetailedBets, error: directDetailedError } = await supabase
              .from('bets')
              .select(`
                *,
@@ -325,23 +351,202 @@ export const useBettingStore = create<BettingStore>((set) => ({
                creator:users!bets_creator_id_fkey(username, avatar_url),
                opponent:users!bets_opponent_id_fkey(username, avatar_url)
              `)
-             .in('id', betIds)
+            .in('id', directBetIds)
              .order('created_at', { ascending: false })
 
-           if (detailedError) {
-             console.error('Error fetching detailed bets:', detailedError)
-             set({ activeBets: [], betHistory: [] })
-             return
+          // Then get participant bets by querying through bet_predictions
+          // This ensures RLS policies allow access to bets where user has a prediction
+          let participantDetailedBets: any[] = []
+          let participantDetailedError: any = null
+          
+          if (participantBetIds.length > 0) {
+            // Filter out bet IDs we already got from direct query to avoid duplicates
+            const participantOnlyBetIds = participantBetIds.filter(id => !directBetIds.includes(id))
+            
+            if (participantOnlyBetIds.length > 0) {
+              // Try querying through bet_predictions with a simpler approach
+              // First, get the bet_predictions rows to ensure RLS allows access
+              const { data: predictionRows, error: predictionCheckError } = await supabase
+                .from('bet_predictions')
+                .select('bet_id')
+                .eq('user_id', user.id)
+                .in('bet_id', participantOnlyBetIds)
+              
+              if (predictionCheckError) {
+                console.error('Error checking bet_predictions access:', predictionCheckError)
+              }
+              
+              const accessibleBetIds = (predictionRows || []).map(row => row.bet_id)
+              
+              if (accessibleBetIds.length > 0) {
+                // Now query bets directly for the accessible bet IDs
+                // Since we verified the user has predictions, RLS should allow this
+                const participantQuery = await supabase
+                  .from('bets')
+                  .select(`
+                    *,
+                    matches!bets_match_id_fkey(*, 
+                      home_team:sports_teams!matches_home_team_id_fkey(*), 
+                      away_team:sports_teams!matches_away_team_id_fkey(*),
+                      sport:sports(*)
+                    ),
+                    bet_predictions(user_id, prediction, amount),
+                    creator:users!bets_creator_id_fkey(username, avatar_url),
+                    opponent:users!bets_opponent_id_fkey(username, avatar_url)
+                  `)
+                  .in('id', accessibleBetIds)
+                  .order('created_at', { ascending: false })
+                
+                participantDetailedBets = participantQuery.data || []
+                participantDetailedError = participantQuery.error
+                
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('📊 Participant bets query (direct):', {
+                    requestedBetIds: participantOnlyBetIds.length,
+                    accessibleBetIds: accessibleBetIds.length,
+                    returnedBets: participantDetailedBets.length,
+                    error: participantDetailedError,
+                  })
+                }
+              } else {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn('⚠️ No accessible bet IDs found through bet_predictions check')
+                }
+              }
+            }
+          }
+
+          // Combine results, avoiding duplicates
+          const directBetsMap = new Map((directDetailedBets || []).map(bet => [bet.id, bet]))
+          const participantBets = participantDetailedBets
+            .map((row: any) => row.bets)
+            .filter((bet: any) => bet && !directBetsMap.has(bet.id))
+          
+          let detailedBets = [
+            ...(directDetailedBets || []),
+            ...participantBets
+          ]
+
+          // Check if we're missing any bets
+          const returnedBetIds = new Set(detailedBets.map(b => b.id))
+          const missingBetIds = allBetIds.filter(id => !returnedBetIds.has(id))
+          
+          // If we have missing bets and participant query failed, try direct query as fallback
+          if (missingBetIds.length > 0) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('⚠️ Missing bets detected, trying fallback query:', {
+                missingBetIds,
+                participantQueryError: participantDetailedError,
+              })
+            }
+            
+            // Fallback: Try direct query for missing bets
+            const { data: fallbackBets, error: fallbackError } = await supabase
+              .from('bets')
+              .select(`
+                *,
+                matches!bets_match_id_fkey(*, 
+                  home_team:sports_teams!matches_home_team_id_fkey(*), 
+                  away_team:sports_teams!matches_away_team_id_fkey(*),
+                  sport:sports(*)
+                ),
+                bet_predictions(user_id, prediction, amount),
+                creator:users!bets_creator_id_fkey(username, avatar_url),
+                opponent:users!bets_opponent_id_fkey(username, avatar_url)
+              `)
+              .in('id', missingBetIds)
+              .order('created_at', { ascending: false })
+            
+            if (fallbackError) {
+              if (process.env.NODE_ENV === 'development') {
+                console.warn('⚠️ Fallback query failed (likely RLS blocking):', fallbackError)
+              }
+            } else if (fallbackBets && fallbackBets.length > 0) {
+              detailedBets = [...detailedBets, ...fallbackBets]
+              if (process.env.NODE_ENV === 'development') {
+                console.log('✅ Fallback query retrieved', fallbackBets.length, 'additional bets')
+              }
+            }
+          }
+
+          // Only fail if direct query failed (participant query failure is handled by fallback)
+          if (directDetailedError) {
+            console.error('Error fetching direct bets:', directDetailedError)
+            set({ activeBets: [], betHistory: [] })
+            return
+          }
+
+           // Debug: Check if all requested bets were returned
+           if (process.env.NODE_ENV === 'development') {
+             const finalReturnedBetIds = new Set(detailedBets.map(b => b.id))
+             const finalMissingBetIds = allBetIds.filter(id => !finalReturnedBetIds.has(id))
+             if (finalMissingBetIds.length > 0) {
+               console.warn('⚠️ Some bets were not returned (likely RLS restrictions):', {
+                 requestedCount: allBetIds.length,
+                 returnedCount: detailedBets.length,
+                 missingBetIds: finalMissingBetIds,
+                 directBetCount: directDetailedBets?.length || 0,
+                 participantBetCount: participantBets.length,
+               })
+             } else {
+               console.log('✅ All bets successfully retrieved:', {
+                 requestedCount: allBetIds.length,
+                 returnedCount: detailedBets.length,
+               })
+             }
            }
 
           const processedBets = await applyPrivacyRulesToBets(detailedBets || [], user.id)
+          const participantIdSet = new Set(participantBetIds)
 
-          const active = processedBets.filter(bet => 
-            ['pending', 'accepted'].includes(bet.status)
-          )
-          const history = processedBets.filter(bet => 
-            ['settled', 'cancelled', 'rejected'].includes(bet.status)
-          )
+          const annotatedBets = processedBets.map(bet => {
+            const isCreator = bet.creator_id === user.id
+            const isOpponent = bet.opponent_id === user.id
+            const hasPrediction = bet.bet_predictions?.some((prediction: BetPredictionWithPrivacy) => prediction.user_id === user.id)
+            // Only count opponent as participant if they've accepted (status is not pending)
+            // For private bets, opponent should only be considered a participant after accepting
+            const isParticipant = isCreator || 
+              hasPrediction || 
+              participantIdSet.has(bet.id) ||
+              (isOpponent && bet.status !== 'pending') // Only count as participant if accepted
+
+            return {
+              ...bet,
+              isParticipant,
+            }
+          })
+
+          const active = annotatedBets.filter(bet => {
+            const isActiveStatus = ['pending', 'accepted'].includes(bet.status)
+            // Also exclude bets where match has completed (they should be in history)
+            const matchCompleted = bet.matches?.status === 'completed' || bet.matches?.status === 'finished'
+            return isActiveStatus && !matchCompleted
+          })
+          
+          const history = annotatedBets.filter(bet => {
+            const isHistoryStatus = ['settled', 'cancelled', 'rejected'].includes(bet.status)
+            // Also include bets where match has completed, even if bet status isn't settled yet
+            // This ensures ended public bets show up in history
+            const matchCompleted = bet.matches?.status === 'completed' || bet.matches?.status === 'finished'
+            return isHistoryStatus || matchCompleted
+          })
+          
+          // Debug logging to help identify missing settled bets
+          if (process.env.NODE_ENV === 'development') {
+            const publicBetsInHistory = history.filter(bet => bet.is_system_generated)
+            const settledPublicBets = history.filter(bet => 
+              bet.is_system_generated && bet.status === 'settled'
+            )
+            console.log('📊 History filtering debug:', {
+              totalAnnotatedBets: annotatedBets.length,
+              activeCount: active.length,
+              historyCount: history.length,
+              publicBetsInHistory: publicBetsInHistory.length,
+              settledPublicBets: settledPublicBets.length,
+              allBetStatuses: [...new Set(annotatedBets.map(b => b.status))],
+              publicBetStatuses: [...new Set(annotatedBets.filter(b => b.is_system_generated).map(b => b.status))],
+            })
+          }
           
           set({ activeBets: active, betHistory: history })
         } catch (error) {

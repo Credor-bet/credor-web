@@ -58,15 +58,28 @@ export const sportsService = {
 
   /**
    * Check if user has explicitly set sport preferences
-   * (vs just having default preferences from trigger)
-   * This checks if user has any preferences with is_interested = false,
-   * which indicates they've made explicit choices
+   * Checks the sports_preferences_set flag in the users table
    */
   async hasExplicitPreferences(): Promise<boolean> {
-    const preferences = await this.getMySportPreferences()
-    // If user has any sport with is_interested = false, they've made explicit choices
-    // Otherwise, they might just have defaults (all true)
-    return preferences.some(pref => !pref.is_interested)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+    
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('sports_preferences_set')
+      .eq('id', user.id)
+      .single()
+    
+    return userProfile?.sports_preferences_set ?? false
+  },
+
+  /**
+   * Skip sport preferences selection
+   * Marks the user as having set preferences (even though they skipped)
+   */
+  async skipSportPreferences(): Promise<void> {
+    const { error } = await supabase.rpc('skip_sport_preferences')
+    if (error) throw error
   },
 }
 

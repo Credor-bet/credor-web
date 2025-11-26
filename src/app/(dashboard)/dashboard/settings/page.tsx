@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/lib/store'
 import { PrivacySettings } from '@/components/settings/privacy-settings'
 import { SportPreferences } from '@/components/settings/sport-preferences'
+import { DiscordLink } from '@/components/settings/discord-link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { User, Mail, Calendar, MapPin, Phone } from 'lucide-react'
 
@@ -117,6 +118,9 @@ export default function SettingsPage() {
 
         {/* Privacy Settings */}
         <PrivacySettings />
+
+        {/* Discord Account Linking */}
+        <DiscordLink />
       </div>
     </div>
   )

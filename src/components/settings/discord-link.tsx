@@ -36,15 +36,21 @@ export function DiscordLink() {
   }
 
   function handleCodeInput(e: React.ChangeEvent<HTMLInputElement>) {
-    // Remove non-numeric characters and limit to 6 digits
-    const value = e.target.value.replace(/\D/g, '').slice(0, 6)
+    // Convert to uppercase, filter invalid characters, and limit to 6 characters
+    // Valid characters: A-H, J-K, M-N, P-Z, 2-9 (excludes 0, O, I, 1, L)
+    const value = e.target.value
+      .toUpperCase()
+      .replace(/[^A-HJ-KM-NP-Z2-9]/g, '')
+      .slice(0, 6)
     setCode(value)
     setError(null) // Clear error when user types
   }
 
   async function handleLink() {
-    if (code.length !== 6) {
-      setError('Please enter a 6-digit code')
+    // Validate 6-character alphanumeric code
+    const codePattern = /^[A-HJ-KM-NP-Z2-9]{6}$/
+    if (!codePattern.test(code)) {
+      setError('Please enter a valid 6-character code')
       return
     }
 
@@ -156,14 +162,14 @@ export function DiscordLink() {
               <Input
                 id="discord-code"
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
+                pattern="[A-HJ-KM-NP-Z2-9]{6}"
                 value={code}
                 onChange={handleCodeInput}
-                placeholder="000000"
+                placeholder="K7X9M2"
                 maxLength={6}
                 disabled={linking}
-                className="text-center text-2xl font-mono tracking-widest h-14 text-lg"
+                className="text-center text-2xl font-mono tracking-widest h-14 text-lg uppercase"
+                style={{ textTransform: 'uppercase' }}
               />
               <p className="text-sm text-gray-500">
                 Run <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs font-mono">/link start</code> in Discord to receive your verification code via DM.
@@ -178,7 +184,7 @@ export function DiscordLink() {
 
             <Button
               onClick={handleLink}
-              disabled={linking || code.length !== 6}
+              disabled={linking || !/^[A-HJ-KM-NP-Z2-9]{6}$/.test(code)}
               className="w-full sm:w-auto"
             >
               {linking ? (

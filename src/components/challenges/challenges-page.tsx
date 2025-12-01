@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAuthStore, useBettingStore, useMatchStore } from '@/lib/store'
-import { ChallengeService, type Challenge } from '@/lib/challenge-service'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useTrendingBets, type TrendingBet } from '@/hooks/queries/use-trending-bets'
+import { useBetSearchQuery, useBetFiltersActions } from '@/store/bet-filters-store'
+import type { Challenge } from '@/lib/challenge-service'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -22,7 +24,6 @@ import {
 } from 'lucide-react'
 import { CreateChallengeDialog } from './create-challenge-dialog'
 import { ChallengeCard } from './challenge-card'
-import { toast } from 'sonner'
 import { useWebSocket } from '@/hooks/use-websocket'
 import { shouldAutoConnect } from '@/lib/websocket-config'
 import { WebSocketTest } from '@/components/debug/websocket-test'
@@ -35,9 +36,17 @@ import { getBetOriginLabel, isPublicEvent } from '@/lib/bet-display'
 
 export function ChallengesPage() {
   const [activeTab, setActiveTab] = useState('pending')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [trendingChallenges, setTrendingChallenges] = useState<Challenge[]>([])
+  
+  // Use Zustand store for search query (UI state)
+  const searchQuery = useBetSearchQuery()
+  const { setSearchQuery } = useBetFiltersActions()
+  
+  // Use React Query for trending bets (server state)
+  const { 
+    data: trendingBetsData = [], 
+    isLoading: isTrendingLoading,
+    refetch: refetchTrending 
+  } = useTrendingBets({ limit: 20 })
   
   const { user } = useAuthStore()
   const { activeBets, betHistory, refreshBets } = useBettingStore()
@@ -111,8 +120,23 @@ export function ChallengesPage() {
     )
   })
 
+  // Convert trending bets to Challenge type and filter for active matches
+  const trendingChallenges: Challenge[] = (trendingBetsData as TrendingBet[])
+    .filter((bet) => {
+      const currentStatus = getCurrentMatchStatus(bet as unknown as Challenge)
+      return currentStatus !== 'cancelled' && 
+             currentStatus !== 'completed' &&
+             currentStatus === 'scheduled'
+    })
+    .map((bet) => ({
+      ...bet,
+      match: bet.match,
+      creator: bet.creator,
+      bet_predictions: bet.bet_predictions,
+      isParticipant: bet.isParticipant,
+    })) as Challenge[]
+
   useEffect(() => {
-    loadTrendingChallenges()
     refreshBets()
   }, [refreshBets])
 
@@ -156,29 +180,9 @@ export function ChallengesPage() {
     subscribeToMatches()
   }, [isConnected, currentChallenges.length, trendingChallenges.length, subscribeToMatch])
 
-  const loadTrendingChallenges = async () => {
-    try {
-      setIsLoading(true)
-      const trending = await ChallengeService.getTrendingChallenges(20)
-      // Filter out challenges for cancelled or completed matches
-      const activeTrending = trending.filter(challenge => {
-        const currentStatus = getCurrentMatchStatus(challenge)
-        return currentStatus !== 'cancelled' && 
-               currentStatus !== 'completed' &&
-               currentStatus === 'scheduled' // Only show pending challenges for scheduled matches
-      })
-      setTrendingChallenges(activeTrending)
-    } catch (error) {
-      console.error('Error loading trending challenges:', error)
-      toast.error('Failed to load trending challenges')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const filteredChallenges = (challenges: Challenge[]) => {
-    if (!searchTerm) return challenges
-    const query = searchTerm.toLowerCase()
+    if (!searchQuery) return challenges
+    const query = searchQuery.toLowerCase()
     
     return challenges.filter(challenge => {
       const originLabel = getBetOriginLabel(challenge, '').toLowerCase()
@@ -329,8 +333,8 @@ export function ChallengesPage() {
            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
            <Input
              placeholder="Search challenges..."
-             value={searchTerm}
-             onChange={(e) => setSearchTerm(e.target.value)}
+             value={searchQuery}
+             onChange={(e) => setSearchQuery(e.target.value)}
              className="pl-10"
            />
          </div>
@@ -425,12 +429,12 @@ export function ChallengesPage() {
         <TabsContent value="trending" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold">Trending Public Challenges</h3>
-            <Button variant="outline" size="sm" onClick={loadTrendingChallenges}>
+            <Button variant="outline" size="sm" onClick={() => refetchTrending()}>
               Refresh
             </Button>
           </div>
           
-          {isLoading ? (
+          {isTrendingLoading ? (
             <div className="grid gap-4">
               {[...Array(3)].map((_, i) => (
                 <Card key={i}>

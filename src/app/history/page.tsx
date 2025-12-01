@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore, useBettingStore } from '@/lib/store'
+import { useCurrentUser } from '@/hooks/queries/use-current-user'
+import { useWallet } from '@/hooks/queries/use-wallet'
+import { useBets } from '@/hooks/queries/use-bets'
 import type { BetPredictionWithPrivacy } from '@/types/bets'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -86,54 +88,34 @@ export default function HistoryPage() {
   const router = useRouter()
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [filteredBets, setFilteredBets] = useState<BetWithDetails[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const { user, wallet, refreshWallet } = useAuthStore()
+
+  const { data: user, isLoading: isUserLoading } = useCurrentUser()
+  const { data: wallet, isLoading: isWalletLoading } = useWallet()
+  const { data: bets = [], isLoading: isBetsLoading } = useBets()
+
   const currency = wallet?.currency || 'CREDORR'
-  const { betHistory, activeBets, refreshBets } = useBettingStore()
-
-  // Load data on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true)
-      try {
-        // Wait for user to be loaded first
-        let attempts = 0
-        const maxAttempts = 20 // 10 seconds total
-        
-        while (attempts < maxAttempts && !user) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-          attempts++
-        }
-        
-                 if (!user) {
-           setIsLoading(false)
-           return
-         }
-        
-        
-        await Promise.all([
-          refreshWallet(),
-          refreshBets()
-        ])
-      } catch (error) {
-        console.error('Error loading history data:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadData()
-  }, [refreshWallet, refreshBets, user])
 
   // Filter bets (robust logic)
   useEffect(() => {
     if (!user) return
 
-    // Combine activeBets and betHistory for a complete view
-    const allBets = [...(activeBets || []), ...(betHistory || [])]
+    const allBets = bets || []
     if (allBets.length === 0) return
 
-    let filtered = [...allBets];
+    // Base filter: exclude incoming private challenges the user hasn't accepted yet.
+    // i.e. pending bets where user is only the opponent and has no prediction.
+    let filtered = allBets.filter((bet) => {
+      const isPending = bet.status === 'pending'
+      const isOpponentOnly = bet.opponent_id === user.id && bet.creator_id !== user.id
+      const hasUserPrediction = bet.bet_predictions?.some((p) => p.user_id === user.id)
+
+      if (isPending && isOpponentOnly && !hasUserPrediction) {
+        // This is an unaccepted incoming challenge → hide from history
+        return false
+      }
+
+      return true
+    })
 
     switch (activeFilter) {
       case 'upcoming':
@@ -190,7 +172,7 @@ export default function HistoryPage() {
 
     
     setFilteredBets(filtered)
-  }, [betHistory, activeBets, activeFilter, user])
+  }, [bets, activeFilter, user])
 
   const getBetStatusIcon = (status: string, matchResult?: string) => {
     switch (status) {
@@ -245,7 +227,7 @@ export default function HistoryPage() {
   const losses = user?.total_losses || 0
   const winRate = user?.win_rate || 0
 
-  if (isLoading) {
+  if (isUserLoading || isWalletLoading || isBetsLoading) {
     return (
       <div className="p-4 md:p-6 flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -291,8 +273,7 @@ export default function HistoryPage() {
       </div>
 
       {/* Statistics Summary */}
-      {!isLoading && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -341,11 +322,10 @@ export default function HistoryPage() {
             </CardContent>
           </Card>
         </div>
-      )}
 
       {/* Bet History */}
       <div className="space-y-4">
-        {isLoading ? (
+        {isBetsLoading ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
@@ -364,7 +344,7 @@ export default function HistoryPage() {
                 }
               </p>
               {activeFilter === 'all' && (
-                <Button className="mt-4" onClick={() => window.location.href = '/dashboard'}>
+                <Button className="mt-4" onClick={() => window.location.href = '/home'}>
                   Create Your First Bet
                 </Button>
               )}
@@ -408,7 +388,7 @@ export default function HistoryPage() {
                 className="cursor-pointer"
                 onClick={(e) => {
                   e.preventDefault()
-                  router.push(`/history/${bet.id}`)
+                  router.push(`/challenges/${bet.id}`)
                 }}
               >
                 <CardContent className="p-0">

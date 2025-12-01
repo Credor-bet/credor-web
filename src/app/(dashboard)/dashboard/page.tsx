@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore, useBettingStore } from '@/lib/store'
+import { useCurrentUser } from '@/hooks/queries/use-current-user'
+import { useBets } from '@/hooks/queries/use-bets'
+import { useTrendingBets } from '@/hooks/queries/use-trending-bets'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -15,91 +17,31 @@ import {
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { ActiveBetsModal } from '@/components/challenges/active-bets-modal'
-import { ChallengeService, type Challenge } from '@/lib/challenge-service'
+import type { Challenge } from '@/lib/challenge-service'
 import { TrendingBetModal } from '@/components/challenges/trending-bet-modal'
 import { getBetOriginLabel, isPublicEvent, PUBLIC_EVENT_LABEL } from '@/lib/bet-display'
 import Link from 'next/link'
 
 export default function DashboardPage() {
-  const [isLoading, setIsLoading] = useState(true)
   const [isActiveBetsModalOpen, setIsActiveBetsModalOpen] = useState(false)
-  const [trendingBet, setTrendingBet] = useState<Challenge | null>(null)
-  const [isLoadingTrending, setIsLoadingTrending] = useState(true)
   const [isTrendingBetModalOpen, setIsTrendingBetModalOpen] = useState(false)
   const [selectedTrendingBet, setSelectedTrendingBet] = useState<Challenge | null>(null)
   const router = useRouter()
-  const { user, refreshUser } = useAuthStore()
+
+  const { data: user, isLoading: isUserLoading } = useCurrentUser()
+  const { data: bets = [], isLoading: isBetsLoading } = useBets()
+  const { data: trendingBets = [], isLoading: isLoadingTrending } = useTrendingBets({ limit: 1 })
   
-  // Defensive Zustand store access
-  const bettingStore = useBettingStore();
-  const activeBets = Array.isArray(bettingStore?.activeBets) ? bettingStore.activeBets : [];
-  const refreshBets = bettingStore?.refreshBets;
-  
-  // Refs to prevent duplicate calls
-  const dataLoadRef = useRef(false)
-  const userLoadRef = useRef<string | null>(null)
+  // Derive first trending bet from React Query data
+  const trendingBet = trendingBets.length > 0 ? (trendingBets[0] as unknown as Challenge) : null
 
-  // Memoized data loading function
-  const loadDashboardData = useCallback(async () => {
-    if (dataLoadRef.current) return
-    dataLoadRef.current = true
-
-    // Add timeout to prevent infinite loading
-    const timeoutPromise = new Promise(resolve => {
-      setTimeout(() => {
-        resolve(null)
-      }, 10000) // 10 second timeout
-    })
-
-    try {
-      // First, ensure user is loaded
-      await refreshUser().catch(err => {
-        console.error('Error refreshing user:', err)
-        return null
-      })
-      
-      // Then load bets if user exists
-      if (user?.id) {
-        const promises = []
-        
-        // Only add refreshBets if it exists
-        if (refreshBets) {
-          promises.push(
-            refreshBets().catch(err => {
-              console.error('Error refreshing bets:', err)
-              return null
-            })
-          )
-        }
-
-        // Race between data loading and timeout
-        await Promise.race([
-          Promise.all(promises),
-          timeoutPromise
-        ])
-      }
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [refreshUser, refreshBets, user?.id])
-
-  // Main data loading effect
-  useEffect(() => {
-    // Only load data if user changes or on initial load
-    if (user?.id !== userLoadRef.current) {
-      userLoadRef.current = user?.id || null
-      dataLoadRef.current = false
-      loadDashboardData()
-    }
-  }, [user?.id, loadDashboardData])
+  const activeBets = (bets || []).filter((bet) =>
+    bet.status === 'pending' || bet.status === 'accepted',
+  )
 
   // Client-side profile completion check (UX improvement, not security)
   useEffect(() => {
     if (user && !user.is_profile_complete) {
-      // Redirect to profile completion if profile is incomplete
-      // This is a UX check, middleware allows access but we redirect for better UX
       router.push('/profile-completion')
     }
   }, [user, router])
@@ -127,31 +69,7 @@ export default function DashboardPage() {
     checkSportPreferences()
   }, [user, router])
 
-  // Load trending bets
-  useEffect(() => {
-    const loadTrendingBets = async () => {
-      try {
-        setIsLoadingTrending(true)
-        // getTrendingChallenges already returns bets sorted by participant_count (most popular first)
-        const bets = await ChallengeService.getTrendingChallenges(1)
-        
-        // Get the most popular bet (first result)
-        if (bets.length > 0) {
-          setTrendingBet(bets[0])
-        }
-      } catch (error) {
-        console.error('Error loading trending bets:', error)
-      } finally {
-        setIsLoadingTrending(false)
-      }
-    }
-    
-    if (user?.id) {
-      loadTrendingBets()
-    }
-  }, [user?.id])
-
-  if (isLoading) {
+  if (isUserLoading || isBetsLoading) {
     return (
       <div className="md:ml-64 p-4 md:p-6 flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

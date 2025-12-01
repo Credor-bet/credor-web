@@ -63,7 +63,7 @@ export function ActiveBetsModal({ isOpen, onClose }: ActiveBetsModalProps) {
   }
 
   const handleBetClick = (betId: string) => {
-    router.push(`/history/${betId}`)
+    router.push(`/challenges/${betId}`)
     onClose()
   }
 

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { useAuthStore, useBettingStore } from './store'
+import { queryClient } from '@/lib/query-client'
 import { applyPrivacyRulesToBets } from './privacy-utils'
 import type { BetPredictionWithPrivacy, PredictionType } from '@/types/bets'
 export type { PredictionType }
@@ -230,17 +230,21 @@ export class ChallengeService {
     maxParticipants?: number
     type?: ChallengeType
   }): Promise<string> {
-    const { user } = useAuthStore.getState()
-    
-    if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.user) {
       throw new Error('User not authenticated')
     }
+
+    const userId = session.user.id
 
     try {
       // Call the place_bet function
       const { data: betId, error } = await supabase
         .rpc('place_bet', {
-          p_creator_id: user.id,
+          p_creator_id: userId,
           p_opponent_id: type === 'friend' ? opponentId : null,
           p_match_id: matchId,
           p_amount: amount,
@@ -254,11 +258,11 @@ export class ChallengeService {
         throw new Error(error.message || 'Failed to create challenge')
       }
 
-      // Refresh bets to update the UI
-      const bettingStore = useBettingStore.getState()
-      if (bettingStore.refreshBets) {
-        await bettingStore.refreshBets()
-      }
+      // Invalidate bets and wallet so React Query refetches fresh data
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['bets'] }),
+        queryClient.invalidateQueries({ queryKey: ['wallet'] }),
+      ])
 
       return betId
     } catch (error) {
@@ -275,17 +279,21 @@ export class ChallengeService {
     amount: number,
     prediction: PredictionType
   ): Promise<boolean> {
-    const { user } = useAuthStore.getState()
-    
-    if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.user) {
       throw new Error('User not authenticated')
     }
+
+    const userId = session.user.id
 
     try {
       const { data: success, error } = await supabase
         .rpc('join_bet', {
           p_bet_id: challengeId,
-          p_user_id: user.id,
+          p_user_id: userId,
           p_amount: amount,
           p_prediction: prediction
         })
@@ -295,11 +303,10 @@ export class ChallengeService {
         throw new Error(error.message || 'Failed to accept challenge')
       }
 
-      // Refresh bets to update the UI
-      const bettingStore = useBettingStore.getState()
-      if (bettingStore.refreshBets) {
-        await bettingStore.refreshBets()
-      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['bets'] }),
+        queryClient.invalidateQueries({ queryKey: ['wallet'] }),
+      ])
 
       return success || false
     } catch (error) {
@@ -312,17 +319,21 @@ export class ChallengeService {
    * Reject a challenge
    */
   static async rejectChallenge(challengeId: string): Promise<boolean> {
-    const { user } = useAuthStore.getState()
-    
-    if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.user) {
       throw new Error('User not authenticated')
     }
+
+    const userId = session.user.id
 
     try {
       const { data: success, error } = await supabase
         .rpc('reject_bet', {
           p_bet_id: challengeId,
-          p_user_id: user.id
+          p_user_id: userId
         })
 
       if (error) {
@@ -330,11 +341,7 @@ export class ChallengeService {
         throw new Error(error.message || 'Failed to reject challenge')
       }
 
-      // Refresh bets to update the UI
-      const bettingStore = useBettingStore.getState()
-      if (bettingStore.refreshBets) {
-        await bettingStore.refreshBets()
-      }
+      await queryClient.invalidateQueries({ queryKey: ['bets'] })
 
       return success || false
     } catch (error) {
@@ -347,17 +354,21 @@ export class ChallengeService {
    * Cancel a challenge (before it's accepted or while it's accepted but before match starts)
    */
   static async cancelChallenge(challengeId: string): Promise<boolean> {
-    const { user } = useAuthStore.getState()
-    
-    if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.user) {
       throw new Error('User not authenticated')
     }
+
+    const userId = session.user.id
 
     try {
       const { data: success, error } = await supabase
         .rpc('cancel_bet', {
           p_bet_id: challengeId,
-          p_user_id: user.id
+          p_user_id: userId
         })
 
       if (error) {
@@ -365,11 +376,7 @@ export class ChallengeService {
         throw new Error(error.message || 'Failed to cancel challenge')
       }
 
-      // Refresh bets to update the UI
-      const bettingStore = useBettingStore.getState()
-      if (bettingStore.refreshBets) {
-        await bettingStore.refreshBets()
-      }
+      await queryClient.invalidateQueries({ queryKey: ['bets'] })
 
       return success || false
     } catch (error) {
@@ -382,17 +389,21 @@ export class ChallengeService {
    * Leave an accepted challenge
    */
   static async leaveChallenge(challengeId: string): Promise<boolean> {
-    const { user } = useAuthStore.getState()
-    
-    if (!user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.user) {
       throw new Error('User not authenticated')
     }
+
+    const userId = session.user.id
 
     try {
       const { data: success, error } = await supabase
         .rpc('leave_bet', {
           p_bet_id: challengeId,
-          p_user_id: user.id
+          p_user_id: userId
         })
 
       if (error) {
@@ -400,11 +411,7 @@ export class ChallengeService {
         throw new Error(error.message || 'Failed to leave challenge')
       }
 
-      // Refresh bets to update the UI
-      const bettingStore = useBettingStore.getState()
-      if (bettingStore.refreshBets) {
-        await bettingStore.refreshBets()
-      }
+      await queryClient.invalidateQueries({ queryKey: ['bets'] })
 
       return success || false
     } catch (error) {
@@ -439,7 +446,10 @@ export class ChallengeService {
         return null
       }
 
-      const viewerId = useAuthStore.getState().user?.id ?? null
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const viewerId = session?.user?.id ?? null
       const [challenge] = await applyPrivacyRulesToBets(data ? [data] : [], viewerId)
       if (!challenge) {
         return null
@@ -487,7 +497,10 @@ export class ChallengeService {
         throw new Error('Failed to fetch challenges')
       }
 
-      const viewerId = useAuthStore.getState().user?.id ?? null
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const viewerId = session?.user?.id ?? null
       const challenges = await applyPrivacyRulesToBets(data || [], viewerId)
       return (challenges || []).map(challenge => withParticipantFlag(challenge, viewerId) as Challenge)
     } catch (error) {
@@ -528,7 +541,8 @@ export class ChallengeService {
    */
   static async getTrendingChallenges(limit: number = 20): Promise<Challenge[]> {
     try {
-      const viewerId = useAuthStore.getState().user?.id ?? null
+      const { data: { session } } = await supabase.auth.getSession()
+      const viewerId = session?.user?.id ?? null
       // Query the materialized view to get trending bet IDs and metrics
       // The view already filters for: status IN ('pending', 'accepted'), opponent_id IS NULL, match.status = 'scheduled', match.start_time > now()
       const { data: metricsData, error: metricsError } = await supabase

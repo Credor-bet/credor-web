@@ -1,13 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore, useFriendsStore } from '@/lib/store'
-import { ChallengeService, type Sport, type Team, type Match, type PredictionType } from '@/lib/challenge-service'
+import { useSports, useTeamSearch, type Team } from '@/hooks/queries/use-sports'
+import { useUpcomingMatches, type MatchWithTeams } from '@/hooks/queries/use-matches'
+import { usePlaceBetMutation } from '@/hooks/mutations/use-bet-mutations'
+import type { PredictionType } from '@/lib/challenge-service'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
@@ -27,10 +30,8 @@ import {
   Coins,
   ChevronRight,
   ChevronLeft,
-  Plus,
   Loader2,
   Calendar,
-  MapPin
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -45,82 +46,41 @@ type Step = 'opponent' | 'sport' | 'fixture' | 'prediction' | 'stake' | 'confirm
 export function CreateChallengeDialog({ children, defaultOpponentId }: CreateChallengeDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [step, setStep] = useState<Step>('opponent')
-  const [isLoading, setIsLoading] = useState(false)
   
   // Form data
   const [selectedOpponentId, setSelectedOpponentId] = useState(defaultOpponentId || '')
-  const [selectedSport, setSelectedSport] = useState<Sport | null>(null)
+  const [selectedSport, setSelectedSport] = useState<{ id: string; name: string; category?: string } | null>(null)
   const [teamSearchTerm, setTeamSearchTerm] = useState('')
   const [selectedHomeTeam, setSelectedHomeTeam] = useState<Team | null>(null)
   const [selectedAwayTeam, setSelectedAwayTeam] = useState<Team | null>(null)
-  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
+  const [selectedMatch, setSelectedMatch] = useState<MatchWithTeams | null>(null)
   const [prediction, setPrediction] = useState<PredictionType>('home_win')
   const [amount, setAmount] = useState('')
   const [minOpponentAmount, setMinOpponentAmount] = useState('')
   
-  // Data states
-  const [sports, setSports] = useState<Sport[]>([])
-  const [teams, setTeams] = useState<Team[]>([])
-  const [matches, setMatches] = useState<Match[]>([])
-  
   const { user, wallet } = useAuthStore()
   const { friends, refreshFriends } = useFriendsStore()
+  
+  // React Query hooks for server data
+  const { data: sports = [], isLoading: isSportsLoading } = useSports()
+  const { data: teams = [] } = useTeamSearch(teamSearchTerm, selectedSport?.id)
+  
+  // Query for upcoming matches with filters
+  const { data: matches = [], isLoading: isLoadingMatches } = useUpcomingMatches({
+    sportId: selectedSport?.id,
+    homeTeamId: selectedHomeTeam?.id,
+    awayTeamId: selectedAwayTeam?.id,
+  })
+  
+  // Mutation for creating challenge
+  const placeBetMutation = usePlaceBetMutation()
 
-  // Load initial data
+  // Load friends when dialog opens
   useEffect(() => {
     if (isOpen) {
-      loadSports()
       refreshFriends()
     }
   }, [isOpen, refreshFriends])
-
-  const loadSports = async () => {
-    try {
-      const sportsData = await ChallengeService.getSports()
-      setSports(sportsData)
-    } catch (error) {
-      console.error('Error loading sports:', error)
-      toast.error('Failed to load sports')
-    }
-  }
-
-  const searchTeams = useCallback(async (searchTerm: string, sportId?: string) => {
-    if (!searchTerm.trim()) {
-      setTeams([])
-      return
-    }
-
-    try {
-      const teamsData = await ChallengeService.searchTeams(searchTerm, sportId)
-      setTeams(teamsData)
-    } catch (error) {
-      console.error('Error searching teams:', error)
-      toast.error('Failed to search teams')
-    }
-  }, [])
-
-  const loadMatches = async () => {
-    try {
-      setIsLoading(true)
-      const matchesData = await ChallengeService.getUpcomingMatches(
-        selectedSport?.id,
-        selectedHomeTeam?.id,
-        selectedAwayTeam?.id
-      )
-      setMatches(matchesData)
-    } catch (error) {
-      console.error('Error loading matches:', error)
-      toast.error('Failed to load matches')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (selectedSport || selectedHomeTeam || selectedAwayTeam) {
-      loadMatches()
-    }
-  }, [selectedSport, selectedHomeTeam, selectedAwayTeam])
 
   const handleCreateChallenge = async () => {
     if (!selectedMatch || !amount || !minOpponentAmount) {
@@ -133,90 +93,72 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
       return
     }
 
-    try {
-      setIsLoading(true)
-      
-      // Show progress toast
-      const progressToast = toast.loading('Creating challenge...')
-      
-      console.log('Creating challenge with params:', {
-        opponentId: selectedOpponentId,
-        matchId: selectedMatch.id,
-        amount: parseFloat(amount),
-        minOpponentAmount: parseFloat(minOpponentAmount),
-        prediction
-      })
-      
-      const challengeId = await ChallengeService.createChallenge({
-        opponentId: selectedOpponentId,
-        matchId: selectedMatch.id,
-        amount: parseFloat(amount),
-        minOpponentAmount: parseFloat(minOpponentAmount),
-        prediction
-      })
+    const progressToast = toast.loading('Creating challenge...')
 
-      // Dismiss progress toast and show success
-      toast.dismiss(progressToast)
-      
-      const opponentName = selectedOpponentId 
-        ? friends.find(f => f.id === selectedOpponentId)?.username || 'your friend'
-        : 'your friend'
-      
-      toast.success(`Challenge created successfully! You staked ${formatCurrency(parseFloat(amount), wallet?.currency || 'CREDORR')} on ${
-        prediction === 'home_win' ? selectedMatch.home_team.name :
-        prediction === 'away_win' ? selectedMatch.away_team.name : 'Draw'
-      }. ${opponentName} will be notified.`, {
-        duration: 6000
-      })
-      
-      setIsOpen(false)
-      resetForm()
-    } catch (error) {
-      console.error('Error creating challenge:', error)
-      
-      // More detailed error logging
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        })
-        
-        // Check if it's a network error
-        if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
-          toast.error('Network connection error. Please check your internet connection and try again.', {
-            duration: 5000
+    placeBetMutation.mutate(
+      {
+        opponentId: selectedOpponentId || null,
+        matchId: selectedMatch.id,
+        amount: parseFloat(amount),
+        minOpponentAmount: parseFloat(minOpponentAmount),
+        prediction,
+      },
+      {
+        onSuccess: () => {
+          toast.dismiss(progressToast)
+          
+          const opponentName = selectedOpponentId 
+            ? friends.find(f => f.id === selectedOpponentId)?.username || 'your friend'
+            : 'your friend'
+          
+          toast.success(`Challenge created successfully! You staked ${formatCurrency(parseFloat(amount), wallet?.currency || 'CREDORR')} on ${
+            prediction === 'home_win' ? selectedMatch.home_team?.name :
+            prediction === 'away_win' ? selectedMatch.away_team?.name : 'Draw'
+          }. ${opponentName} will be notified.`, {
+            duration: 6000
           })
-        } else if (error.message.includes('Insufficient funds') || error.message.includes('insufficient balance')) {
-          toast.error(`Insufficient wallet balance. You need ${formatCurrency(parseFloat(amount), wallet?.currency || 'CREDORR')} but only have ${formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')} available.`)
-        } else if (error.message.includes('Match not found')) {
-          toast.error('The selected match is no longer available. Please choose a different match.')
-        } else if (error.message.includes('User not found')) {
-          toast.error('The selected opponent is not available. Please choose a different friend.')
-        } else {
-          toast.error(`Failed to create challenge: ${error.message}`)
-        }
-      } else {
-        toast.error('Failed to create challenge. Please try again.')
+          
+          setIsOpen(false)
+          resetForm()
+        },
+        onError: (error) => {
+          toast.dismiss(progressToast)
+          console.error('Error creating challenge:', error)
+          
+          if (error instanceof Error) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
+              toast.error('Network connection error. Please check your internet connection and try again.', {
+                duration: 5000
+              })
+            } else if (error.message.includes('Insufficient funds') || error.message.includes('insufficient balance')) {
+              toast.error(`Insufficient wallet balance. You need ${formatCurrency(parseFloat(amount), wallet?.currency || 'CREDORR')} but only have ${formatCurrency(wallet?.balance || 0, wallet?.currency || 'CREDORR')} available.`)
+            } else if (error.message.includes('Match not found')) {
+              toast.error('The selected match is no longer available. Please choose a different match.')
+            } else if (error.message.includes('User not found')) {
+              toast.error('The selected opponent is not available. Please choose a different friend.')
+            } else {
+              toast.error(`Failed to create challenge: ${error.message}`)
+            }
+          } else {
+            toast.error('Failed to create challenge. Please try again.')
+          }
+        },
       }
-    } finally {
-      setIsLoading(false)
-    }
+    )
   }
 
   const resetForm = () => {
     setStep('opponent')
     setSelectedOpponentId(defaultOpponentId || '')
     setSelectedSport(null)
-    setTeamSearchTerm('')
+    setTeamSearchTerm('') // This will clear the team search results via React Query
     setSelectedHomeTeam(null)
     setSelectedAwayTeam(null)
     setSelectedMatch(null)
     setPrediction('home_win')
     setAmount('')
     setMinOpponentAmount('')
-    setTeams([])
-    setMatches([])
+    // matches are managed by React Query - they'll reset automatically when filters are cleared
   }
 
   const renderOpponentStep = () => (
@@ -306,10 +248,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           <Input
             placeholder="Search for teams..."
             value={teamSearchTerm}
-            onChange={(e) => {
-              setTeamSearchTerm(e.target.value)
-              searchTeams(e.target.value, selectedSport?.id)
-            }}
+            onChange={(e) => setTeamSearchTerm(e.target.value)}
             className="pl-10"
           />
         </div>
@@ -328,7 +267,6 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                     setSelectedAwayTeam(team)
                   }
                   setTeamSearchTerm('')
-                  setTeams([])
                 }}
               >
                 <div className="flex items-center">
@@ -422,7 +360,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
       )}
 
       {/* Available Matches */}
-      {isLoading ? (
+      {isLoadingMatches ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span className="ml-2">Loading matches...</span>
@@ -440,37 +378,37 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="flex items-center">
-                                      {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
+                                      {match.home_team?.cloudinary_logo_url || match.home_team?.logo_url ? (
                   <img 
-                    src={match.home_team.cloudinary_logo_url || match.home_team.logo_url || ''} 
+                    src={match.home_team?.cloudinary_logo_url || match.home_team?.logo_url || ''} 
                     alt="" 
                     className="h-6 w-6 mr-2 rounded-full object-cover" 
                   />
                 ) : (
                   <div className="h-6 w-6 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">
-                      {match.home_team.name?.slice(0, 1).toUpperCase()}
+                      {match.home_team?.name?.slice(0, 1).toUpperCase() ?? '?'}
                     </span>
                   </div>
                 )}
-                <span className="font-medium">{match.home_team.name}</span>
+                <span className="font-medium">{match.home_team?.name ?? 'Home Team'}</span>
               </div>
               <span className="text-sm text-muted-foreground">vs</span>
               <div className="flex items-center">
-                {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
+                {match.away_team?.cloudinary_logo_url || match.away_team?.logo_url ? (
                   <img 
-                    src={match.away_team.cloudinary_logo_url || match.away_team.logo_url || ''} 
+                    src={match.away_team?.cloudinary_logo_url || match.away_team?.logo_url || ''} 
                     alt="" 
                     className="h-6 w-6 mr-2 rounded-full object-cover" 
                   />
                 ) : (
                   <div className="h-6 w-6 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">
-                      {match.away_team.name?.slice(0, 1).toUpperCase()}
+                      {match.away_team?.name?.slice(0, 1).toUpperCase() ?? '?'}
                     </span>
                   </div>
                 )}
-                      <span className="font-medium">{match.away_team.name}</span>
+                      <span className="font-medium">{match.away_team?.name ?? 'Away Team'}</span>
                     </div>
                   </div>
                 </div>
@@ -479,7 +417,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
                     <Clock className="h-3 w-3 mr-1" />
                     {formatDate(match.start_time)}
                   </div>
-                  <Badge variant="outline">{match.sport.name}</Badge>
+                  <Badge variant="outline">{match.sport?.name ?? 'Unknown'}</Badge>
                 </div>
               </div>
             </Button>
@@ -503,37 +441,37 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="flex items-center">
-                  {selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url ? (
+                  {selectedMatch.home_team?.cloudinary_logo_url || selectedMatch.home_team?.logo_url ? (
                     <img 
-                      src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url || ''} 
+                      src={selectedMatch.home_team?.cloudinary_logo_url || selectedMatch.home_team?.logo_url || ''} 
                       alt="" 
                       className="h-8 w-8 mr-2 rounded-full object-cover" 
                     />
                   ) : (
                     <div className="h-8 w-8 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
                       <span className="text-white text-sm font-bold">
-                        {selectedMatch.home_team.name?.slice(0, 1).toUpperCase()}
+                        {selectedMatch.home_team?.name?.slice(0, 1).toUpperCase() ?? '?'}
                       </span>
                     </div>
                   )}
-                  <span className="font-medium">{selectedMatch.home_team.name}</span>
+                  <span className="font-medium">{selectedMatch.home_team?.name ?? 'Home Team'}</span>
                 </div>
                 <span className="text-sm text-muted-foreground">vs</span>
                 <div className="flex items-center">
-                  {selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url ? (
+                  {selectedMatch.away_team?.cloudinary_logo_url || selectedMatch.away_team?.logo_url ? (
                     <img 
-                      src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url || ''} 
+                      src={selectedMatch.away_team?.cloudinary_logo_url || selectedMatch.away_team?.logo_url || ''} 
                       alt="" 
                       className="h-8 w-8 mr-2 rounded-full object-cover" 
                     />
                   ) : (
                     <div className="h-8 w-8 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                       <span className="text-white text-sm font-bold">
-                        {selectedMatch.away_team.name?.slice(0, 1).toUpperCase()}
+                        {selectedMatch.away_team?.name?.slice(0, 1).toUpperCase() ?? '?'}
                       </span>
                     </div>
                   )}
-                  <span className="font-medium">{selectedMatch.away_team.name}</span>
+                  <span className="font-medium">{selectedMatch.away_team?.name ?? 'Away Team'}</span>
                 </div>
               </div>
             </div>
@@ -551,7 +489,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           onClick={() => setPrediction('home_win')}
         >
           <div className="text-left">
-            <div className="font-medium">{selectedMatch?.home_team.name} to Win</div>
+            <div className="font-medium">{selectedMatch?.home_team?.name ?? 'Home'} to Win</div>
             <div className="text-xs text-muted-foreground">Home team victory</div>
           </div>
         </Button>
@@ -573,7 +511,7 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           onClick={() => setPrediction('away_win')}
         >
           <div className="text-left">
-            <div className="font-medium">{selectedMatch?.away_team.name} to Win</div>
+            <div className="font-medium">{selectedMatch?.away_team?.name ?? 'Away'} to Win</div>
             <div className="text-xs text-muted-foreground">Away team victory</div>
           </div>
         </Button>
@@ -701,37 +639,37 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center">
-                    {selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url ? (
+                    {selectedMatch.home_team?.cloudinary_logo_url || selectedMatch.home_team?.logo_url ? (
                       <img 
-                        src={selectedMatch.home_team.cloudinary_logo_url || selectedMatch.home_team.logo_url || ''} 
+                        src={selectedMatch.home_team?.cloudinary_logo_url || selectedMatch.home_team?.logo_url || ''} 
                         alt="" 
                         className="h-6 w-6 mr-2 rounded-full object-cover" 
                       />
                     ) : (
                       <div className="h-6 w-6 mr-2 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
                         <span className="text-white text-xs font-bold">
-                          {selectedMatch.home_team.name?.slice(0, 1).toUpperCase()}
+                          {selectedMatch.home_team?.name?.slice(0, 1).toUpperCase() ?? '?'}
                         </span>
                       </div>
                     )}
-                    <span className="font-medium">{selectedMatch.home_team.name}</span>
+                    <span className="font-medium">{selectedMatch.home_team?.name ?? 'Home Team'}</span>
                   </div>
                   <span className="text-sm text-muted-foreground">vs</span>
                   <div className="flex items-center">
-                    {selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url ? (
+                    {selectedMatch.away_team?.cloudinary_logo_url || selectedMatch.away_team?.logo_url ? (
                       <img 
-                        src={selectedMatch.away_team.cloudinary_logo_url || selectedMatch.away_team.logo_url || ''} 
+                        src={selectedMatch.away_team?.cloudinary_logo_url || selectedMatch.away_team?.logo_url || ''} 
                         alt="" 
                         className="h-6 w-6 mr-2 rounded-full object-cover" 
                       />
                     ) : (
                       <div className="h-6 w-6 mr-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                         <span className="text-white text-xs font-bold">
-                          {selectedMatch.away_team.name?.slice(0, 1).toUpperCase()}
+                          {selectedMatch.away_team?.name?.slice(0, 1).toUpperCase() ?? '?'}
                         </span>
                       </div>
                     )}
-                    <span className="font-medium">{selectedMatch.away_team.name}</span>
+                    <span className="font-medium">{selectedMatch.away_team?.name ?? 'Away Team'}</span>
                   </div>
                 </div>
               </div>
@@ -747,8 +685,8 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           <div className="flex justify-between">
             <span className="text-muted-foreground">Your Prediction:</span>
             <span className="font-medium">
-              {prediction === 'home_win' && selectedMatch?.home_team.name}
-              {prediction === 'away_win' && selectedMatch?.away_team.name}
+              {prediction === 'home_win' && selectedMatch?.home_team?.name}
+              {prediction === 'away_win' && selectedMatch?.away_team?.name}
               {prediction === 'draw' && 'Draw'}
             </span>
           </div>
@@ -856,8 +794,8 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
           </Button>
 
           {step === 'confirm' ? (
-            <Button onClick={handleCreateChallenge} disabled={isLoading}>
-              {isLoading ? (
+            <Button onClick={handleCreateChallenge} disabled={placeBetMutation.isPending}>
+              {placeBetMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Creating...

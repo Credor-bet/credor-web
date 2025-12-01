@@ -123,7 +123,7 @@ export function TrendingBetModal({ bet, isOpen, onClose }: TrendingBetModalProps
 
   const handleHistory = () => {
     if (!resolvedBet) return
-    router.push(`/history/${resolvedBet.id}`)
+    router.push(`/challenges/${resolvedBet.id}`)
     onClose()
   }
 

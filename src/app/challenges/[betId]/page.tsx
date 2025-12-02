@@ -209,11 +209,11 @@ export default function ChallengeDetailsPage() {
   }
 
   const getBetResult = () => {
-    if (!bet || bet.status !== 'settled' || !bet.matches?.match_result) {
+    if (!bet || !user || bet.status !== 'settled' || !bet.matches?.match_result) {
       return null
     }
 
-    const userPrediction = bet.bet_predictions?.find((p) => p.user_id === user?.id)?.prediction
+    const userPrediction = bet.bet_predictions?.find((p) => p.user_id === user.id)?.prediction
     const opponentPrediction = bet.bet_predictions?.find((pred) => pred.user_id !== user.id)?.prediction
 
     if (!userPrediction) return null
@@ -325,10 +325,10 @@ export default function ChallengeDetailsPage() {
   // Get default prediction (opposite of creator's prediction)
   const getDefaultPrediction = (): PredictionType => {
     if (!bet) return 'home_win'
-    const creatorPrediction = bet.bet_predictions?.find(p => p.user_id === bet.creator_id)?.prediction
-    if (creatorPrediction === 'home_win') return 'away_win'
-    if (creatorPrediction === 'away_win') return 'home_win'
-    if (creatorPrediction === 'draw') return 'home_win'
+    const creatorPredictionValue = bet.bet_predictions?.find(p => p.user_id === bet.creator_id)?.prediction
+    if (creatorPredictionValue === 'home_win') return 'away_win'
+    if (creatorPredictionValue === 'away_win') return 'home_win'
+    if (creatorPredictionValue === 'draw') return 'home_win'
     return 'home_win'
   }
   
@@ -339,43 +339,7 @@ export default function ChallengeDetailsPage() {
       setPrediction(getDefaultPrediction())
     }
   }, [bet, stakeAmount])
-
-  if (isLoading) {
-    return (
-      <div className="p-4 md:pg-6 flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    )
-  }
-
-  if (baseError || !bet) {
-    return (
-      <div className="p-4 md:p-6">
-        <div className="max-w-2xl mx-auto">
-          <Button
-            variant="ghost"
-            onClick={() => router.push('/home')}
-            className="mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Home
-          </Button>
-
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <XCircle className="h-12 w-12 text-red-500 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb1">{baseError ?? 'Bet not found'}</h3>
-              <p className="text-gray-600 text-center mb-4">
-                The bet you are trying to view either does not exist or you do not have permission to access it.
-              </p>
-              <Button onClick={() => router.push('/home')}>Go to Home</Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
+  
   // For private bets, if user doesn't have access, redirect them
   useEffect(() => {
     if (!isLoading && bet && !hasAccess) {
@@ -383,29 +347,77 @@ export default function ChallengeDetailsPage() {
     }
   }, [isLoading, bet, hasAccess, router])
   
-  // Show loading while checking access
-  if (!hasAccess) {
-    return (
-      <div className="p-4 md:p-6 flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    )
-  }
+  // Load participant details for public bets
+  useEffect(() => {
+    const loadParticipantDetails = async () => {
+      if (!bet?.bet_predictions || bet.bet_predictions.length === 0 || !publicEvent) {
+        setParticipantsWithDetails([])
+        setParticipantCount(bet?.bet_predictions?.length ?? 0)
+        return
+      }
+
+      setIsLoadingParticipants(true)
+      try {
+        const userIds = bet.bet_predictions.map(p => p.user_id)
+        
+        // Fetch user details for all participants
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('id, username, avatar_url')
+          .in('id', userIds)
+
+        if (error) {
+          console.error('Error fetching participant details:', error)
+          setParticipantsWithDetails([])
+          setParticipantCount(bet?.bet_predictions?.length ?? 0)
+          return
+        }
+
+        // Map predictions with user details
+        const participants = bet.bet_predictions.map(prediction => {
+          const userInfo = userData?.find(u => u.id === prediction.user_id)
+          return {
+            user_id: prediction.user_id,
+            username: userInfo?.username || 'Unknown User',
+            avatar_url: userInfo?.avatar_url || null,
+            prediction: prediction.prediction,
+            amount: prediction.amount,
+            isPredictionHidden: prediction.isPredictionHidden,
+            isAmountHidden: prediction.isAmountHidden,
+          }
+        })
+
+        setParticipantsWithDetails(participants)
+        setParticipantCount(participants.length)
+      } catch (error) {
+        console.error('Error loading participant details:', error)
+        setParticipantsWithDetails([])
+        setParticipantCount(bet?.bet_predictions?.length ?? 0)
+      } finally {
+        setIsLoadingParticipants(false)
+      }
+    }
+
+    if (publicEvent && bet?.bet_predictions) {
+      loadParticipantDetails()
+    }
+  }, [bet, publicEvent])
 
   const betResult = getBetResult()
   const originLabel = getBetOriginLabel(bet, PUBLIC_EVENT_LABEL)
-  const matchResultPrediction = bet.matches?.match_result
-    ? ({
-        user_id: 'result',
-        prediction: bet.matches.match_result as BetPredictionWithPrivacy['prediction'],
-        amount: null,
-      } as BetPredictionWithPrivacy)
-    : undefined
-  const matchResultLabel = getPredictionDisplay(matchResultPrediction, bet.matches, 'Unknown result')
-  const userPredictionDisplay = getPredictionDisplay(userPrediction, bet.matches, 'No prediction')
+  const matchResultPrediction =
+    bet && bet.matches && bet.matches.match_result
+      ? ({
+          user_id: 'result',
+          prediction: bet.matches.match_result as BetPredictionWithPrivacy['prediction'],
+          amount: null,
+        } as BetPredictionWithPrivacy)
+      : undefined
+  const matchResultLabel = getPredictionDisplay(matchResultPrediction, bet?.matches, 'Unknown result')
+  const userPredictionDisplay = getPredictionDisplay(userPrediction, bet?.matches, 'No prediction')
   const userAmountDisplay = getAmountDisplay(userPrediction, currency)
   const opponentName =
-    bet.creator_id === user?.id ? bet.opponent?.username || 'Waiting for opponent' : originLabel
+    bet?.creator_id === user?.id ? bet.opponent?.username || 'Waiting for opponent' : originLabel
   
   // Handler functions
   const handleAcceptChallenge = async () => {
@@ -545,226 +557,409 @@ export default function ChallengeDetailsPage() {
     )
   }
 
-  return (
-    <div className="p-4 md:p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+  if (isLoading) {
+    return (
+      <div className="p-4 md:pg-6 flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
+
+  if (baseError || !bet) {
+    return (
+      <div className="p-4 md:p-6">
+        <div className="max-w-2xl mx-auto">
           <Button
             variant="ghost"
-            onClick={() => router.back()}
-            className="flex items-center"
+            onClick={() => router.push('/home')}
+            className="mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+            Back to Home
           </Button>
 
-          <div className="flex items-center space-x-2">
-            <Badge
-              variant="secondary"
-              className={getBetStatusColor(bet.status)}
-            >
-              {getBetStatusIcon(bet.status)}
-              <span className="ml-1 capitalize">{bet.status}</span>
-            </Badge>
-            <span className="text-xs text-gray-500 font-mono">#{bet.id.slice(0, 8).toUpperCase()}</span>
-          </div>
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <XCircle className="h-12 w-12 text-red-500 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb1">{baseError ?? 'Bet not found'}</h3>
+              <p className="text-gray-600 text-center mb-4">
+                The bet you are trying to view either does not exist or you do not have permission to access it.
+              </p>
+              <Button onClick={() => router.push('/home')}>Go to Home</Button>
+            </CardContent>
+          </Card>
         </div>
+      </div>
+    )
+  }
+  
+  // Show loading while checking access
+  if (!hasAccess) {
+    return (
+      <div className="p-4 md:p-6 flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
 
-        {/* Bet Summary Card */}
-        <Card className="overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl">Bet Details</CardTitle>
-                <p className="text-blue-100 mt-1">Created on {formatDate(bet.created_at)}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold">{formatCurrency(getTotalStake(), currency)}</div>
-                <p className="text-blue-100 text-sm">Total Stake</p>
-              </div>
+  return (
+    <div className="p-4 md:p-6">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-6">
+        {/* Left column: match banner, info, details */}
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              onClick={() => router.back()}
+              className="flex items-center"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+
+            <div className="flex items-center space-x-2">
+              <Badge
+                variant="secondary"
+                className={getBetStatusColor(bet.status)}
+              >
+                {getBetStatusIcon(bet.status)}
+                <span className="ml-1 capitalize">{bet.status}</span>
+              </Badge>
+              <span className="text-xs text-gray-500 font-mono">#{bet.id.slice(0, 8).toUpperCase()}</span>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="p-6">
-            {/* Match Information */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
-                  <span className="text-sm font-semibold text-gray-800">
-                    {bet.matches?.competition || bet.matches?.sport?.name || 'Match'}
-                  </span>
+          {/* Important information banner */}
+          <div className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+            <span className="font-semibold">Important information: </span>
+            <span>
+              The following event is based on the outcome after 90 minutes plus stoppage time. This does not include extra time or penalties.
+            </span>
+          </div>
+
+          {/* Bet Summary Card */}
+          <Card className="overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl">Bet Details</CardTitle>
+                  <p className="text-blue-100 mt-1">Created on {formatDate(bet.created_at)}</p>
                 </div>
-                {publicEvent && (
-                  <Badge variant="outline" className="text-xs">
-                    Public Bet
-                  </Badge>
+                <div className="text-right">
+                  <div className="text-2xl font-bold">{formatCurrency(getTotalStake(), currency)}</div>
+                  <p className="text-blue-100 text-sm">Total Stake</p>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-6">
+              {/* Match Information */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full" />
+                    <span className="text-sm font-semibold text-gray-800">
+                      {bet.matches?.competition || bet.matches?.sport?.name || 'Match'}
+                    </span>
+                  </div>
+                  {publicEvent && (
+                    <Badge variant="outline" className="text-xs">
+                      Public Bet
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Team Matchup */}
+                <div className="bg-gray-50 rounded-lg p-6 mb-4">
+                  <div className="flex items-center justify-between">
+                    {/* Home Team */}
+                    <div className="flex items-center space-x-4 flex-1">
+                      {bet.matches?.home_team?.cloudinary_logo_url || bet.matches?.home_team?.logo_url ? (
+                        <img
+                          src={bet.matches.home_team.cloudinary_logo_url || bet.matches.home_team.logo_url || ''}
+                          alt={`${bet.matches.home_team.name} logo`}
+                          className="w-16 h-16 rounded-full object-cover shadow-lg"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-lg">
+                          <span className="text-white text-sm font-bold">
+                            {bet.matches?.home_team?.name?.slice(0, 3).toUpperCase() || 'HT'}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {bet.matches?.home_team?.name || 'Home Team'}
+                        </p>
+                        <p className="text-sm text-gray-500">Home</p>
+                        {bet.matches?.home_score !== null && bet.matches?.home_score !== undefined && (
+                          <p className="text-2xl font-bold text-gray-900 mt-1">{bet.matches.home_score}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* VS Separator */}
+                    <div className="flex flex-col items-center mx-6">
+                      <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center shadow-lg">
+                        <span className="text-white text-sm font-bold">VS</span>
+                      </div>
+                      <span className="text-sm text-gray-500 mt-2 text-center">
+                        {bet.matches?.start_time ? formatDate(bet.matches.start_time) : 'TBD'}
+                      </span>
+                    </div>
+
+                    {/* Away Team */}
+                    <div className="flex items-center space-x-4 flex-1 justify-end">
+                      <div className="text-right">
+                        <p className="text-lg font-semibold text-gray-900">
+                          {bet.matches?.away_team?.name || 'Away Team'}
+                        </p>
+                        <p className="text-sm text-gray-500">Away</p>
+                        {bet.matches?.away_score !== null && bet.matches?.away_score !== undefined && (
+                          <p className="text-2xl font-bold text-gray-900 mt-1">{bet.matches.away_score}</p>
+                        )}
+                      </div>
+                      {bet.matches?.away_team?.cloudinary_logo_url || bet.matches?.away_team?.logo_url ? (
+                        <img
+                          src={bet.matches.away_team.cloudinary_logo_url || bet.matches.away_team.logo_url || ''}
+                          alt={`${bet.matches.away_team.name} logo`}
+                          className="w-16 h-16 rounded-full object-cover shadow-lg"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                          <span className="text-white text-sm font-bold">
+                            {bet.matches?.away_team?.name?.slice(0, 3).toUpperCase() || 'AT'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Match Result */}
+                {bet.status === 'settled' && bet.matches?.match_result && (
+                  <div className="bg-blue-50 rounded-lg p-4 mb-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <Trophy className="h-5 w-5 text-blue-600" />
+                        <span className="font-semibold text-gray-900">Match Result</span>
+                      </div>
+                      <Badge variant="outline" className="bg-white text-blue-700 border-blue-200">
+                        {matchResultLabel}
+                      </Badge>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {/* Team Matchup */}
-              <div className="bg-gray-50 rounded-lg p-6 mb-4">
-                <div className="flex items-center justify-between">
-                  {/* Home Team */}
-                  <div className="flex items-center space-x-4 flex-1">
-                    {bet.matches?.home_team?.cloudinary_logo_url || bet.matches?.home_team?.logo_url ? (
-                      <img
-                        src={bet.matches.home_team.cloudinary_logo_url || bet.matches.home_team.logo_url || ''}
-                        alt={`${bet.matches.home_team.name} logo`}
-                        className="w-16 h-16 rounded-full object-cover shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-lg">
-                        <span className="text-white text-sm font-bold">
-                          {bet.matches?.home_team?.name?.slice(0, 3).toUpperCase() || 'HT'}
-                        </span>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-lg font-semibold text-gray-900">
-                        {bet.matches?.home_team?.name || 'Home Team'}
-                      </p>
-                      <p className="text-sm text-gray-500">Home</p>
-                      {bet.matches?.home_score !== null && bet.matches?.home_score !== undefined && (
-                        <p className="text-2xl font-bold text-gray-900 mt-1">{bet.matches.home_score}</p>
-                      )}
-                    </div>
-                  </div>
+              <Separator className="my-6" />
 
-                  {/* VS Separator */}
-                  <div className="flex flex-col items-center mx-6">
-                    <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center shadow-lg">
-                      <span className="text-white text-sm font-bold">VS</span>
-                    </div>
-                    <span className="text-sm text-gray-500 mt-2 text-center">
-                      {bet.matches?.start_time ? formatDate(bet.matches.start_time) : 'TBD'}
-                    </span>
-                  </div>
-
-                  {/* Away Team */}
-                  <div className="flex items-center space-x-4 flex-1 justify-end">
-                    <div className="text-right">
-                      <p className="text-lg font-semibold text-gray-900">
-                        {bet.matches?.away_team?.name || 'Away Team'}
-                      </p>
-                      <p className="text-sm text-gray-500">Away</p>
-                      {bet.matches?.away_score !== null && bet.matches?.away_score !== undefined && (
-                        <p className="text-2xl font-bold text-gray-900 mt-1">{bet.matches.away_score}</p>
-                      )}
-                    </div>
-                    {bet.matches?.away_team?.cloudinary_logo_url || bet.matches?.away_team?.logo_url ? (
-                      <img
-                        src={bet.matches.away_team.cloudinary_logo_url || bet.matches.away_team.logo_url || ''}
-                        alt={`${bet.matches.away_team.name} logo`}
-                        className="w-16 h-16 rounded-full object-cover shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
-                        <span className="text-white text-sm font-bold">
-                          {bet.matches?.away_team?.name?.slice(0, 3).toUpperCase() || 'AT'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Match Result */}
-              {bet.status === 'settled' && bet.matches?.match_result && (
-                <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Trophy className="h-5 w-5 text-blue-600" />
-                      <span className="font-semibold text-gray-900">Match Result</span>
-                    </div>
-                    <Badge variant="outline" className="bg-white text-blue-700 border-blue-200">
-                      {matchResultLabel}
-                    </Badge>
-                  </div>
+              {/* Participants & Predictions - private bets only */}
+              {!publicEvent && canSeeFullDetails && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Participants & Predictions</h3>
+                  {/* For brevity, reuse the same participant / prediction UI from the history page here. */}
+                  {/* ... existing participants UI from history page ... */}
                 </div>
               )}
-            </div>
 
-            <Separator className="my-6" />
+              {/* Outcome Summary (if user is a participant or is the opponent viewing an unaccepted bet) */}
+              {(isParticipant || (bet.opponent_id === user?.id && !userPrediction)) && (
+                <>
+                  <Separator className="my-6" />
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Position</h3>
+                    <div className={`grid gap-4 ${publicEvent ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+                      <Card className="border border-gray-200">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="flex items-center justify-between text-sm font-medium">
+                            <span>Your Prediction</span>
+                            {betResult && (
+                              <Badge
+                                variant={betResult === 'win' ? 'default' : betResult === 'lose' ? 'destructive' : 'outline'}
+                              >
+                                {betResult === 'win' && 'You Won'}
+                                {betResult === 'lose' && 'You Lost'}
+                                {betResult === 'draw' && 'Draw'}
+                                {betResult === 'both_win' && 'All Winners'}
+                              </Badge>
+                            )}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          <p className="text-sm text-gray-600">
+                            Outcome: <span className="font-semibold">{userPredictionDisplay}</span>
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Stake: <span className="font-semibold">{userAmountDisplay}</span>
+                          </p>
+                        </CardContent>
+                      </Card>
 
-            {/* Participants & Predictions */}
-            {canSeeFullDetails && (
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Participants & Predictions</h3>
-                {/* For brevity, reuse the same participant / prediction UI from the history page here.
-                    (You already have this block implemented; we can keep it functionally identical.) */}
-                {/* ... existing participants UI from history page ... */}
-              </div>
-            )}
-
-            {/* Outcome Summary (if user is a participant or is the opponent viewing an unaccepted bet) */}
-            {(isParticipant || (bet.opponent_id === user?.id && !userPrediction)) && (
-              <>
-                <Separator className="my-6" />
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Position</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card className="border border-gray-200">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="flex items-center justify-between text-sm font-medium">
-                          <span>Your Prediction</span>
-                          {betResult && (
-                            <Badge
-                              variant={betResult === 'win' ? 'default' : betResult === 'lose' ? 'destructive' : 'outline'}
-                            >
-                              {betResult === 'win' && 'You Won'}
-                              {betResult === 'lose' && 'You Lost'}
-                              {betResult === 'draw' && 'Draw'}
-                              {betResult === 'both_win' && 'All Winners'}
-                            </Badge>
-                          )}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <p className="text-sm text-gray-600">
-                          Outcome: <span className="font-semibold">{userPredictionDisplay}</span>
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Stake: <span className="font-semibold">{userAmountDisplay}</span>
-                        </p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border border-gray-200">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Opponent / Market</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <p className="text-sm text-gray-600">
-                          Counterparty:{' '}
-                          <span className="font-semibold">
-                            {opponentName || (publicEvent ? PUBLIC_EVENT_LABEL : 'Unknown')}
-                          </span>
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Their prediction:{' '}
-                          <span className="font-semibold">{opponentPredictionDisplay}</span>
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Their stake: <span className="font-semibold">{opponentAmountDisplay}</span>
-                        </p>
-                      </CardContent>
-                    </Card>
+                      {/* Only show Opponent / Market card for private bets */}
+                      {!publicEvent && (
+                        <Card className="border border-gray-200">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Opponent / Market</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-2">
+                            <p className="text-sm text-gray-600">
+                              Counterparty:{' '}
+                              <span className="font-semibold">
+                                {opponentName || 'Unknown'}
+                              </span>
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Their prediction:{' '}
+                              <span className="font-semibold">{opponentPredictionDisplay}</span>
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Their stake: <span className="font-semibold">{opponentAmountDisplay}</span>
+                            </p>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {/* Interaction Buttons */}
-            {bet.status !== 'settled' && bet.status !== 'cancelled' && bet.status !== 'rejected' && (
-              <>
-                <Separator className="my-6" />
-                <div className="flex flex-wrap gap-3">
+              {/* Participant Activity Breakdown (for public bets) */}
+              {publicEvent && bet.bet_predictions && bet.bet_predictions.length > 0 && (
+                <>
+                  <Separator className="my-6" />
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Participant Activity</h3>
+                    {isLoadingParticipants ? (
+                      <div className="text-center text-muted-foreground py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-2 text-sm">Loading participants...</p>
+                      </div>
+                    ) : participantsWithDetails.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8">
+                        <p className="text-sm">No participants yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {participantsWithDetails.map((participant) => (
+                          <Card key={participant.user_id} className="border border-gray-200">
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3 flex-1">
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={participant.avatar_url || ''} />
+                                    <AvatarFallback>
+                                      {participant.username.charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm">
+                                      {participant.username}
+                                      {participant.user_id === bet.creator_id && (
+                                        <Badge variant="outline" className="ml-2 text-xs">Creator</Badge>
+                                      )}
+                                    </p>
+                                    <div className="flex items-center space-x-3 text-xs text-gray-600 mt-1">
+                                      <span>
+                                        Prediction: <span className="font-semibold">
+                                        {participant.isPredictionHidden 
+                                          ? 'Hidden' 
+                                          : getPredictionDisplay(participant as any, bet?.matches, 'Not set')}
+                                        </span>
+                                      </span>
+                                      <span>•</span>
+                                      <span>
+                                        Stake: <span className="font-semibold">
+                                          {participant.isAmountHidden 
+                                            ? 'Hidden' 
+                                            : getAmountDisplay(participant as any, currency, '—')}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Meta / Sharing */}
+              <Separator className="my-6" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 text-sm text-gray-500">
+                  <Users className="h-4 w-4" />
+                  <span>
+                    {bet.bet_predictions?.length ?? 0} participant{(bet.bet_predictions?.length ?? 0) === 1 ? '' : 's'}
+                  </span>
+                  {publicEvent && (
+                    <>
+                      <span>•</span>
+                      <span className="inline-flex items-center space-x-1">
+                        <TrendingUp className="h-4 w-4" />
+                        <span>Public challenge</span>
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.href).catch(() => {
+                        // no-op, best-effort
+                      })
+                    }}
+                  >
+                    <Share2 className="h-4 w-4 mr-1" />
+                    Share
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column: interaction panel */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Trade Panel</CardTitle>
+              <p className="text-xs text-gray-500">
+                Manage your position in this challenge.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Status</span>
+                <Badge className={getBetStatusColor(bet.status)}>
+                  <span className="capitalize">{bet.status}</span>
+                </Badge>
+              </div>
+
+              <div className="text-xs text-gray-600 space-y-1">
+                <div className="flex justify-between">
+                  <span>Your prediction</span>
+                  <span className="font-semibold">{userPredictionDisplay}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Your stake</span>
+                  <span className="font-semibold">{userAmountDisplay}</span>
+                </div>
+              </div>
+
+              {bet.status !== 'settled' && bet.status !== 'cancelled' && bet.status !== 'rejected' && (
+                <div className="flex flex-col gap-2">
                   {canAccept && (
                     <Button
                       onClick={() => setShowAcceptDialog(true)}
-                      className="flex-1 min-w-[120px]"
+                      className="w-full justify-center"
                     >
                       <Target className="h-4 w-4 mr-2" />
                       {publicEvent ? 'Join Bet' : 'Accept Challenge'}
@@ -772,9 +967,9 @@ export default function ChallengeDetailsPage() {
                   )}
                   {canReject && (
                     <Button
-                      variant="destructive"
+                      variant="outline"
                       onClick={() => setShowRejectDialog(true)}
-                      className="flex-1 min-w-[120px]"
+                      className="w-full justify-center"
                     >
                       <XCircle className="h-4 w-4 mr-2" />
                       Reject
@@ -784,7 +979,7 @@ export default function ChallengeDetailsPage() {
                     <Button
                       variant="destructive"
                       onClick={() => setShowCancelDialog(true)}
-                      className="flex-1 min-w-[120px]"
+                      className="w-full justify-center"
                     >
                       <Ban className="h-4 w-4 mr-2" />
                       Cancel
@@ -794,51 +989,17 @@ export default function ChallengeDetailsPage() {
                     <Button
                       variant="outline"
                       onClick={() => setShowLeaveDialog(true)}
-                      className="flex-1 min-w-[120px]"
+                      className="w-full justify-center"
                     >
                       <LogOut className="h-4 w-4 mr-2" />
                       Leave
                     </Button>
                   )}
                 </div>
-              </>
-            )}
-
-            {/* Meta / Sharing */}
-            <Separator className="my-6" />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3 text-sm text-gray-500">
-                <Users className="h-4 w-4" />
-                <span>
-                  {bet.bet_predictions?.length ?? 0} participant{(bet.bet_predictions?.length ?? 0) === 1 ? '' : 's'}
-                </span>
-                {publicEvent && (
-                  <>
-                    <span>•</span>
-                    <span className="inline-flex items-center space-x-1">
-                      <TrendingUp className="h-4 w-4" />
-                      <span>Public challenge</span>
-                    </span>
-                  </>
-                )}
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(window.location.href).catch(() => {
-                      // no-op, best-effort
-                    })
-                  }}
-                >
-                  <Share2 className="h-4 w-4 mr-1" />
-                  Share
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Accept/Join Challenge Dialog */}
@@ -872,9 +1033,30 @@ export default function ChallengeDetailsPage() {
                 onChange={(e) => setPrediction(e.target.value as PredictionType)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="home_win">{bet?.matches?.home_team?.name || 'Home Team'} Win</option>
-                <option value="away_win">{bet?.matches?.away_team?.name || 'Away Team'} Win</option>
-                <option value="draw">Draw</option>
+                <option 
+                  value="home_win" 
+                  disabled={creatorPrediction?.prediction === 'home_win'}
+                  style={creatorPrediction?.prediction === 'home_win' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                >
+                  {bet?.matches?.home_team?.name || 'Home Team'} Win
+                  {creatorPrediction?.prediction === 'home_win' && ' (Creator\'s choice)'}
+                </option>
+                <option 
+                  value="away_win" 
+                  disabled={creatorPrediction?.prediction === 'away_win'}
+                  style={creatorPrediction?.prediction === 'away_win' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                >
+                  {bet?.matches?.away_team?.name || 'Away Team'} Win
+                  {creatorPrediction?.prediction === 'away_win' && ' (Creator\'s choice)'}
+                </option>
+                <option 
+                  value="draw" 
+                  disabled={creatorPrediction?.prediction === 'draw'}
+                  style={creatorPrediction?.prediction === 'draw' ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                >
+                  Draw
+                  {creatorPrediction?.prediction === 'draw' && ' (Creator\'s choice)'}
+                </option>
               </select>
             </div>
             <div className="flex justify-end space-x-2">

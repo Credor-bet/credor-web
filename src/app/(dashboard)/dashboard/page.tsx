@@ -3,41 +3,63 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCurrentUser } from '@/hooks/queries/use-current-user'
-import { useBets } from '@/hooks/queries/use-bets'
-import { useTrendingBets } from '@/hooks/queries/use-trending-bets'
+import { useTrendingBets, type TrendingBet } from '@/hooks/queries/use-trending-bets'
+import { useSports, useLeagues } from '@/hooks/queries/use-sports'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { 
-  Target,
-  Zap,
-  Users,
-  ExternalLink
-} from 'lucide-react'
+import { Zap, Users } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
-import { ActiveBetsModal } from '@/components/challenges/active-bets-modal'
-import type { Challenge } from '@/lib/challenge-service'
-import { TrendingBetModal } from '@/components/challenges/trending-bet-modal'
-import { getBetOriginLabel, isPublicEvent, PUBLIC_EVENT_LABEL } from '@/lib/bet-display'
-import Link from 'next/link'
 
 export default function DashboardPage() {
-  const [isActiveBetsModalOpen, setIsActiveBetsModalOpen] = useState(false)
-  const [isTrendingBetModalOpen, setIsTrendingBetModalOpen] = useState(false)
-  const [selectedTrendingBet, setSelectedTrendingBet] = useState<Challenge | null>(null)
+  const [selectedSportId, setSelectedSportId] = useState<string | 'all'>('all')
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | 'all'>('all')
   const router = useRouter()
 
   const { data: user, isLoading: isUserLoading } = useCurrentUser()
-  const { data: bets = [], isLoading: isBetsLoading } = useBets()
-  const { data: trendingBets = [], isLoading: isLoadingTrending } = useTrendingBets({ limit: 1 })
-  
-  // Derive first trending bet from React Query data
-  const trendingBet = trendingBets.length > 0 ? (trendingBets[0] as unknown as Challenge) : null
-
-  const activeBets = (bets || []).filter((bet) =>
-    bet.status === 'pending' || bet.status === 'accepted',
+  const { data: sports = [], isLoading: isSportsLoading } = useSports()
+  const { data: leagues = [], isLoading: isLeaguesLoading } = useLeagues(
+    selectedSportId === 'all' ? undefined : selectedSportId,
   )
+
+  const sportFilter = selectedSportId === 'all' ? undefined : selectedSportId
+  const leagueFilter = selectedLeagueId === 'all' ? undefined : selectedLeagueId
+
+  const {
+    data: trendingBetsRaw = [],
+    isLoading: isTrendingLoading,
+  } = useTrendingBets({
+    sportId: sportFilter,
+    leagueId: leagueFilter,
+    limit: 50,
+    orderBy: 'activity_score',
+  })
+
+  // Client-side filtering to ensure only bets matching the selected filters are shown
+  // This is a safety measure in case server-side filtering doesn't work correctly
+  const trendingBets = trendingBetsRaw.filter((bet) => {
+    // Filter out bets without matches
+    if (!bet.match) return false
+
+    // If a sport is selected, ensure the bet's match sport matches
+    if (sportFilter && bet.match.sport?.id !== sportFilter) {
+      return false
+    }
+
+    // If a league is selected, ensure the bet's match league matches
+    if (leagueFilter) {
+      // Check if match has league_id or if competition matches
+      const matchLeagueId = bet.match.league_id
+      const matchCompetition = bet.match.competition
+      // Note: We might need to check league name if league_id isn't available
+      // For now, we'll rely on the server-side filtering and this is just a safety check
+      if (matchLeagueId && matchLeagueId !== leagueFilter) {
+        return false
+      }
+    }
+
+    return true
+  })
 
   // Client-side profile completion check (UX improvement, not security)
   useEffect(() => {
@@ -54,14 +76,11 @@ export default function DashboardPage() {
       try {
         const { sportsService } = await import('@/lib/supabase/sports')
         const hasExplicit = await sportsService.hasExplicitPreferences()
-        
-        // If user has no explicit preferences (no false values), they likely only have defaults
-        // Redirect to sport selection to let them make explicit choices
+
         if (!hasExplicit) {
           router.push('/sport-selection')
         }
       } catch (error) {
-        // On error, allow access (better UX than blocking)
         console.error('Error checking sport preferences:', error)
       }
     }
@@ -69,204 +88,175 @@ export default function DashboardPage() {
     checkSportPreferences()
   }, [user, router])
 
-  if (isUserLoading || isBetsLoading) {
+  // Reset league filter when sport changes
+  useEffect(() => {
+    setSelectedLeagueId('all')
+  }, [selectedSportId])
+
+  if (isUserLoading) {
     return (
       <div className="md:ml-64 p-4 md:p-6 flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     )
   }
 
-  const trendingIsPublicEvent = trendingBet ? isPublicEvent(trendingBet) : false
-  const trendingOriginLabel = trendingBet ? getBetOriginLabel(trendingBet, PUBLIC_EVENT_LABEL) : ''
-  const trendingIsParticipant = trendingBet
-    ? (trendingBet.isParticipant ?? trendingBet.bet_predictions?.some(pred => pred.user_id === user?.id))
-    : false
+  const renderTrendingCard = (bet: TrendingBet) => {
+    const match = bet.match
+    const sportName = match?.sport?.name ?? 'Unknown sport'
+    const leagueName = match?.competition ?? 'League'
 
-  return (
-    <div className="md:ml-64 p-4 md:p-6 space-y-6">
-      {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Avatar className="h-16 w-16">
-              <AvatarImage src={user?.avatar_url || ''} />
-              <AvatarFallback className="text-lg">
-                {user?.username?.charAt(0).toUpperCase() || 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="text-2xl font-bold">Welcome back, {user?.username}!</h1>
-              <p className="text-blue-100">Ready to place some bets?</p>
-            </div>
+    return (
+      <Card
+        key={bet.id}
+        className="cursor-pointer hover:shadow-md transition-shadow"
+        onClick={() => router.push(`/challenges/${bet.id}`)}
+      >
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{sportName}</span>
+            <span>{leagueName}</span>
           </div>
 
+          {match?.home_team && match?.away_team ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3 flex-1">
+                <div className="flex items-center space-x-2 flex-1">
+                  {match.home_team.cloudinary_logo_url || match.home_team.logo_url ? (
+                    <img
+                      src={match.home_team.cloudinary_logo_url || match.home_team.logo_url || ''}
+                      alt={match.home_team.name}
+                      className="w-8 h-8 object-contain"
+                    />
+                  ) : null}
+                  <span className="font-semibold text-sm truncate">{match.home_team.name}</span>
+                </div>
+                <span className="text-muted-foreground text-xs">vs</span>
+                <div className="flex items-center space-x-2 flex-1 justify-end">
+                  {match.away_team.cloudinary_logo_url || match.away_team.logo_url ? (
+                    <img
+                      src={match.away_team.cloudinary_logo_url || match.away_team.logo_url || ''}
+                      alt={match.away_team.name}
+                      className="w-8 h-8 object-contain"
+                    />
+                  ) : null}
+                  <span className="font-semibold text-sm truncate text-right">
+                    {match.away_team.name}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">Bet #{bet.id.slice(0, 8).toUpperCase()}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-1">
+                <Users className="h-3 w-3" />
+                <span>
+                  {bet.participant_count || bet.bet_predictions?.length || 0}{' '}
+                  {(bet.participant_count || bet.bet_predictions?.length || 0) === 1
+                    ? 'participant'
+                    : 'participants'}
+                </span>
+              </div>
+              <span>Min stake {bet.min_opponent_amount}</span>
+            </div>
+            {match?.start_time && <span>{formatDate(match.start_time)}</span>}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="md:ml-64">
+      {/* Sticky header with title and filters - flush to top on desktop, below mobile header on mobile */}
+      <div className="sticky top-14 md:top-0 z-10 bg-background border-b px-4 md:px-6 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="h-5 w-5 text-blue-600" />
+          <h1 className="text-xl font-semibold">Trending Markets</h1>
+        </div>
+
+        {/* Sports row */}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={selectedSportId === 'all' ? 'default' : 'outline'}
+            onClick={() => setSelectedSportId('all')}
+          >
+            All
+          </Button>
+          {isSportsLoading ? (
+            <span className="text-xs text-muted-foreground self-center">Loading sports...</span>
+          ) : (
+            sports.map((sport) => (
+              <Button
+                key={sport.id}
+                size="sm"
+                variant={selectedSportId === sport.id ? 'default' : 'outline'}
+                onClick={() => setSelectedSportId(sport.id)}
+              >
+                {sport.name}
+              </Button>
+            ))
+          )}
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-4">
-        <Card 
-          className="cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => setIsActiveBetsModalOpen(true)}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Bets</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeBets.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Pending and accepted • Click to view all
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Trending Bets */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Zap className="h-5 w-5" />
-              <span>Trending Bets</span>
-            </div>
-            <Link 
-              href="/dashboard/challenges" 
-              className="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <span>View All</span>
-              <ExternalLink className="h-3 w-3" />
-            </Link>
-          </CardTitle>
-          <CardDescription>
-            Most popular bet right now
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoadingTrending ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-sm text-muted-foreground mt-2">Loading trending bets...</p>
-            </div>
-          ) : !trendingBet ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Zap className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="font-medium mb-2">No trending bets</p>
-              <p className="text-sm">Check back later for popular bets!</p>
-            </div>
-          ) : (
-            <div 
-              className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-100 hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => {
-                setSelectedTrendingBet(trendingBet)
-                setIsTrendingBetModalOpen(true)
-              }}
-            >
-              {trendingBet.match?.home_team && trendingBet.match?.away_team ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3 flex-1">
-                      <div className="flex items-center space-x-2 flex-1">
-                        {trendingBet.match.home_team.cloudinary_logo_url || trendingBet.match.home_team.logo_url ? (
-                          <img 
-                            src={trendingBet.match.home_team.cloudinary_logo_url || trendingBet.match.home_team.logo_url || ''} 
-                            alt={trendingBet.match.home_team.name}
-                            className="w-8 h-8 object-contain"
-                          />
-                        ) : null}
-                        <span className="font-semibold text-sm">{trendingBet.match.home_team.name}</span>
-                      </div>
-                      <span className="text-muted-foreground">vs</span>
-                      <div className="flex items-center space-x-2 flex-1">
-                        {trendingBet.match.away_team.cloudinary_logo_url || trendingBet.match.away_team.logo_url ? (
-                          <img 
-                            src={trendingBet.match.away_team.cloudinary_logo_url || trendingBet.match.away_team.logo_url || ''} 
-                            alt={trendingBet.match.away_team.name}
-                            className="w-8 h-8 object-contain"
-                          />
-                        ) : null}
-                        <span className="font-semibold text-sm">{trendingBet.match.away_team.name}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-2">
-                        {trendingIsPublicEvent ? (
-                          <>
-                            <div className="h-6 w-6 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-[10px] font-semibold flex items-center justify-center">
-                              {PUBLIC_EVENT_LABEL.slice(0, 1)}
-                            </div>
-                            <span className="text-muted-foreground">{PUBLIC_EVENT_LABEL}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={trendingBet.creator?.avatar_url || ''} />
-                              <AvatarFallback className="text-xs">
-                                {trendingBet.creator?.username?.charAt(0).toUpperCase() || 'U'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-muted-foreground">by {trendingOriginLabel}</span>
-                          </>
-                        )}
-                        {trendingIsParticipant && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Joined
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">
-                          {trendingBet.participant_count || trendingBet.bet_predictions?.length || 0} {(trendingBet.participant_count || trendingBet.bet_predictions?.length || 0) === 1 ? 'participant' : 'participants'}
-                        </span>
-                      </div>
-                    </div>
-                    {trendingBet.match?.start_time && (
-                      <span className="text-muted-foreground">
-                        {formatDate(trendingBet.match.start_time)}
-                      </span>
-                    )}
-                  </div>
-                </div>
+      {/* Main content area */}
+      <div className="px-4 md:px-6 py-6">
+        {/* League selection (when a specific sport is selected) */}
+        {selectedSportId !== 'all' && (
+          <div className="mb-6">
+            <p className="text-sm font-medium text-muted-foreground mb-3">Leagues</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={selectedLeagueId === 'all' ? 'default' : 'outline'}
+                onClick={() => setSelectedLeagueId('all')}
+              >
+                All leagues
+              </Button>
+              {isLeaguesLoading ? (
+                <span className="text-xs text-muted-foreground self-center">Loading leagues...</span>
               ) : (
-                <div className="space-y-2">
-                  <p className="font-medium">Bet #{trendingBet.id.slice(0, 8)}</p>
-                  {trendingBet.creator && (
-                    <p className="text-sm text-muted-foreground">
-                      by {trendingBet.creator.username}
-                    </p>
-                  )}
-                  <div className="flex items-center space-x-1 text-sm">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">
-                      {trendingBet.participant_count || trendingBet.bet_predictions?.length || 0} {(trendingBet.participant_count || trendingBet.bet_predictions?.length || 0) === 1 ? 'participant' : 'participants'}
-                    </span>
-                  </div>
-                </div>
+                leagues.map((league) => (
+                  <Button
+                    key={league.id}
+                    size="sm"
+                    variant={selectedLeagueId === league.id ? 'default' : 'outline'}
+                    onClick={() => setSelectedLeagueId(league.id)}
+                  >
+                    {league.name}
+                  </Button>
+                ))
               )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
 
-      {/* Active Bets Modal */}
-      <ActiveBetsModal 
-        isOpen={isActiveBetsModalOpen} 
-        onClose={() => setIsActiveBetsModalOpen(false)} 
-      />
-      <TrendingBetModal
-        bet={selectedTrendingBet}
-        isOpen={isTrendingBetModalOpen}
-        onClose={() => {
-          setIsTrendingBetModalOpen(false)
-          setSelectedTrendingBet(null)
-        }}
-      />
+        {/* Trending Markets List as main content */}
+      {isTrendingLoading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" />
+          <p className="text-sm text-muted-foreground mt-2">Loading trending markets...</p>
+        </div>
+      ) : trendingBets.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          {sportFilter || leagueFilter
+            ? 'No match events occurring now for this selection. Try another sport or league.'
+            : 'No trending markets available at the moment. Check back soon!'}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {trendingBets.map(renderTrendingCard)}
+        </div>
+      )}
+      </div>
     </div>
   )
-} 
+}

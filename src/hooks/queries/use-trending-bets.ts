@@ -100,6 +100,14 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
       bet_predictions(user_id, prediction, amount)
     `)
 
+  // Apply optional sport/league filters via the embedded match relationship
+  if (params.sportId) {
+    query = query.eq('match.sport_id', params.sportId)
+  }
+  if (params.leagueId) {
+    query = query.eq('match.league_id', params.leagueId)
+  }
+
   // Build OR condition for bet IDs
   if (betIds.length === 1) {
     query = query.eq('id', betIds[0])
@@ -117,7 +125,7 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
 
   if (!betsData || betsData.length === 0) {
     // Fallback: Query bets directly if materialized view has stale data
-    const { data: fallbackBets, error: fallbackError } = await supabase
+    let fallbackQuery = supabase
       .from('bets')
       .select(`
         *,
@@ -131,6 +139,15 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
       `)
       .eq('status', 'pending')
       .is('opponent_id', null)
+
+    if (params.sportId) {
+      fallbackQuery = fallbackQuery.eq('match.sport_id', params.sportId)
+    }
+    if (params.leagueId) {
+      fallbackQuery = fallbackQuery.eq('match.league_id', params.leagueId)
+    }
+
+    const { data: fallbackBets, error: fallbackError } = await fallbackQuery
       .order('created_at', { ascending: false })
       .limit(params.limit ?? 20)
 
@@ -139,13 +156,29 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
     }
 
     const sanitizedFallback = await applyPrivacyRulesToBets(fallbackBets, viewerId)
-    return sanitizedFallback.map((bet: any) => ({
+    let fallbackResults = sanitizedFallback.map((bet: any) => ({
       ...bet,
       isParticipant: bet.bet_predictions?.some((p: any) => p.user_id === viewerId) ?? false,
       participant_count: bet.bet_predictions?.length || 0,
       total_wagered: bet.bet_predictions?.reduce((sum: number, p: any) => sum + (Number(p.amount ?? 0) || 0), 0) || 0,
       activity_score: 0,
     })) as TrendingBet[]
+
+    // Apply client-side filtering for sport/league (as backup to server-side filtering)
+    if (params.sportId) {
+      fallbackResults = fallbackResults.filter((bet: any) => {
+        return bet.match?.sport?.id === params.sportId
+      })
+    }
+    if (params.leagueId) {
+      fallbackResults = fallbackResults.filter((bet: any) => {
+        const match = bet.match
+        if (!match) return false
+        return match.league_id === params.leagueId || match.competition === params.leagueId
+      })
+    }
+
+    return fallbackResults
   }
 
   // Apply privacy rules
@@ -155,7 +188,7 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
   const metricsMap = new Map(metricsData.map((item) => [item.bet_id, item]))
 
   // Filter and transform
-  const validBets = sanitizedBets
+  let validBets = sanitizedBets
     .filter((bet: any) => bet.opponent_id === null && (bet.status === 'pending' || bet.status === 'accepted'))
     .map((bet: any) => {
       const metrics = metricsMap.get(bet.id)
@@ -167,11 +200,29 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
         activity_score: metrics?.activity_score || 0,
       } as TrendingBet
     })
-    .sort((a, b) => {
-      const aMetrics = metricsMap.get(a.id)
-      const bMetrics = metricsMap.get(b.id)
-      return (bMetrics?.participant_count || 0) - (aMetrics?.participant_count || 0)
+
+  // Apply client-side filtering for sport/league (as backup to server-side filtering)
+  if (params.sportId) {
+    validBets = validBets.filter((bet: any) => {
+      return bet.match?.sport?.id === params.sportId
     })
+  }
+  if (params.leagueId) {
+    validBets = validBets.filter((bet: any) => {
+      // Check if match has league_id or if competition matches
+      const match = bet.match
+      if (!match) return false
+      // If league_id is available on match, use it; otherwise try to match by competition name
+      return match.league_id === params.leagueId || match.competition === params.leagueId
+    })
+  }
+
+  // Sort by metrics
+  validBets.sort((a, b) => {
+    const aMetrics = metricsMap.get(a.id)
+    const bMetrics = metricsMap.get(b.id)
+    return (bMetrics?.participant_count || 0) - (aMetrics?.participant_count || 0)
+  })
 
   return validBets
 }

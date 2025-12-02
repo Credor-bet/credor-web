@@ -417,7 +417,7 @@ export default function ChallengeDetailsPage() {
   const userPredictionDisplay = getPredictionDisplay(userPrediction, bet?.matches, 'No prediction')
   const userAmountDisplay = getAmountDisplay(userPrediction, currency)
   const opponentName =
-    bet?.creator_id === user?.id ? bet.opponent?.username || 'Waiting for opponent' : originLabel
+    bet?.creator_id === user?.id ? bet?.opponent?.username || 'Waiting for opponent' : originLabel
   
   // Handler functions
   const handleAcceptChallenge = async () => {

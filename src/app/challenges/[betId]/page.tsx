@@ -82,6 +82,13 @@ interface BetWithDetails {
       id: string
       name: string
     }
+    league?: {
+      id: string
+      name: string
+      logo_url: string | null
+      logo_url_dark: string | null
+      tier: number | null
+    } | null
   }
   creator?: {
     username: string
@@ -660,7 +667,7 @@ export default function ChallengeDetailsPage() {
                   <div className="flex items-center space-x-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full" />
                     <span className="text-sm font-semibold text-gray-800">
-                      {bet.matches?.competition || bet.matches?.sport?.name || 'Match'}
+                      {bet.matches?.league?.name || bet.matches?.competition || bet.matches?.sport?.name || 'Match'}
                     </span>
                   </div>
                   {publicEvent && (

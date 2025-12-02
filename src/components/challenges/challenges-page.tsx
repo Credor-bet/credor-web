@@ -25,6 +25,7 @@ import {
 import { CreateChallengeDialog } from './create-challenge-dialog'
 import { ChallengeCard } from './challenge-card'
 import { ActiveBetsModal } from './active-bets-modal'
+import { PendingBetsModal } from './pending-bets-modal'
 import { useWebSocket } from '@/hooks/use-websocket'
 import { shouldAutoConnect } from '@/lib/websocket-config'
 import { WebSocketTest } from '@/components/debug/websocket-test'
@@ -38,6 +39,7 @@ import { getBetOriginLabel, isPublicEvent } from '@/lib/bet-display'
 export function ChallengesPage() {
   const [activeTab, setActiveTab] = useState('pending')
   const [isActiveBetsModalOpen, setIsActiveBetsModalOpen] = useState(false)
+  const [isPendingBetsModalOpen, setIsPendingBetsModalOpen] = useState(false)
   
   // Use Zustand store for search query (UI state)
   const searchQuery = useBetSearchQuery()
@@ -53,7 +55,11 @@ export function ChallengesPage() {
   const { user } = useAuthStore()
   const { activeBets, betHistory, refreshBets } = useBettingStore()
   const { getLiveMatch } = useMatchStore()
-  
+
+  // Filter active bets to exclude pending bets (only show accepted bets)
+  // Pending bets should only appear in the "Pending" card
+  const acceptedBets = activeBets.filter(bet => bet.status === 'accepted')
+
   // Helper function to get current match status (live data takes priority)
   const getCurrentMatchStatus = (challenge: Challenge): string => {
     if (!challenge.match) return 'unknown'
@@ -233,20 +239,7 @@ export function ChallengesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${process.env.NODE_ENV === 'development' ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-4 mb-6`}>
-        <Card className="hover:shadow-md transition-shadow bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Challenges</CardTitle>
-            <Trophy className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeChallenges.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Currently in progress
-            </p>
-          </CardContent>
-        </Card>
-
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${process.env.NODE_ENV === 'development' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-4 mb-6`}>
         <Card
           className="cursor-pointer hover:shadow-md transition-shadow bg-white"
           onClick={() => setIsActiveBetsModalOpen(true)}
@@ -256,14 +249,17 @@ export function ChallengesPage() {
             <Target className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeBets.length}</div>
+            <div className="text-2xl font-bold">{acceptedBets.length}</div>
             <p className="text-xs text-muted-foreground">
-              Pending and accepted • Tap to view all
+              Accepted bets • Tap to view all
             </p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow bg-white">
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow bg-white"
+          onClick={() => setIsPendingBetsModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
             <Clock className="h-4 w-4 text-yellow-600" />
@@ -271,33 +267,7 @@ export function ChallengesPage() {
           <CardContent>
             <div className="text-2xl font-bold">{pendingChallenges.length}</div>
             <p className="text-xs text-muted-foreground">
-              Awaiting response
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Your Challenges</CardTitle>
-            <Users className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{currentChallenges.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Total current challenges
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Trending</CardTitle>
-            <TrendingUp className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{trendingChallenges.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Public challenges
+              Awaiting response • Tap to view all
             </p>
           </CardContent>
         </Card>
@@ -506,6 +476,12 @@ export function ChallengesPage() {
       <ActiveBetsModal
         isOpen={isActiveBetsModalOpen}
         onClose={() => setIsActiveBetsModalOpen(false)}
+      />
+
+      {/* Pending Bets Modal */}
+      <PendingBetsModal
+        isOpen={isPendingBetsModalOpen}
+        onClose={() => setIsPendingBetsModalOpen(false)}
       />
     </div>
   )

@@ -15,7 +15,13 @@ export interface Match {
   home_score?: number
   away_score?: number
   result?: 'home_win' | 'away_win' | 'draw'
-  competition?: string
+  league?: {
+    id: string
+    name: string
+    logo_url?: string | null
+    logo_url_dark?: string | null
+    tier?: number | null
+  } | null
   home_team: {
     id: string
     name: string

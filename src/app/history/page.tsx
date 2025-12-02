@@ -62,6 +62,13 @@ interface BetWithDetails {
       id: string
       name: string
     }
+    league?: {
+      id: string
+      name: string
+      logo_url: string | null
+      logo_url_dark: string | null
+      tier: number | null
+    } | null
   }
   home_team?: {
     name: string
@@ -426,7 +433,7 @@ export default function HistoryPage() {
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                         <span className="text-sm font-semibold text-gray-800">
-                          {bet.matches?.competition || bet.matches?.sport?.name || 'Unknown League'}
+                          {bet.matches?.league?.name || bet.matches?.competition || bet.matches?.sport?.name || 'Unknown League'}
                         </span>
                       </div>
                       <Badge variant="outline" className="text-xs font-medium bg-gray-50">

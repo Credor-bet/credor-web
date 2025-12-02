@@ -43,6 +43,13 @@ export interface BetWithDetails {
       id: string
       name: string
     }
+    league?: {
+      id: string
+      name: string
+      logo_url: string | null
+      logo_url_dark: string | null
+      tier: number | null
+    } | null
   }
   creator?: {
     id: string
@@ -88,10 +95,10 @@ async function fetchBets(): Promise<BetWithDetails[]> {
         match_result,
         home_score,
         away_score,
-        competition,
         home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url),
         away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url),
-        sport:sports(id, name)
+        sport:sports(id, name),
+        league:leagues(id, name, logo_url, logo_url_dark, tier)
       ),
       creator:users!bets_creator_id_fkey(id, username, avatar_url),
       opponent:users!bets_opponent_id_fkey(id, username, avatar_url),

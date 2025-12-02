@@ -48,12 +48,11 @@ export default function DashboardPage() {
 
     // If a league is selected, ensure the bet's match league matches
     if (leagueFilter) {
-      // Check if match has league_id or if competition matches
-      const matchLeagueId = bet.match.league_id
+      // Check if match has league_id, league.id, or competition matches
+      const matchLeagueId = bet.match.league_id || bet.match.league?.id
       const matchCompetition = bet.match.competition
-      // Note: We might need to check league name if league_id isn't available
-      // For now, we'll rely on the server-side filtering and this is just a safety check
-      if (matchLeagueId && matchLeagueId !== leagueFilter) {
+      // Note: We rely on the server-side filtering and this is just a safety check
+      if (matchLeagueId && matchLeagueId !== leagueFilter && matchCompetition !== leagueFilter) {
         return false
       }
     }
@@ -104,7 +103,7 @@ export default function DashboardPage() {
   const renderTrendingCard = (bet: TrendingBet) => {
     const match = bet.match
     const sportName = match?.sport?.name ?? 'Unknown sport'
-    const leagueName = match?.competition ?? 'League'
+    const leagueName = match?.league?.name || match?.competition || 'League'
 
     return (
       <Card
@@ -213,16 +212,17 @@ export default function DashboardPage() {
         {selectedSportId !== 'all' && (
           <div className="mb-6">
             <p className="text-sm font-medium text-muted-foreground mb-3">Leagues</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-1 px-1">
               <Button
                 size="sm"
                 variant={selectedLeagueId === 'all' ? 'default' : 'outline'}
                 onClick={() => setSelectedLeagueId('all')}
+                className="flex-shrink-0"
               >
                 All leagues
               </Button>
               {isLeaguesLoading ? (
-                <span className="text-xs text-muted-foreground self-center">Loading leagues...</span>
+                <span className="text-xs text-muted-foreground self-center flex-shrink-0">Loading leagues...</span>
               ) : (
                 leagues.map((league) => (
                   <Button
@@ -230,6 +230,7 @@ export default function DashboardPage() {
                     size="sm"
                     variant={selectedLeagueId === league.id ? 'default' : 'outline'}
                     onClick={() => setSelectedLeagueId(league.id)}
+                    className="flex-shrink-0"
                   >
                     {league.name}
                   </Button>

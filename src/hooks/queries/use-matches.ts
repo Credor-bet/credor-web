@@ -34,6 +34,13 @@ export interface MatchWithTeams {
     id: string
     name: string
   }
+  league?: {
+    id: string
+    name: string
+    logo_url: string | null
+    logo_url_dark: string | null
+    tier: number | null
+  } | null
 }
 
 async function fetchMatches(): Promise<MatchWithTeams[]> {
@@ -43,7 +50,8 @@ async function fetchMatches(): Promise<MatchWithTeams[]> {
       `
       *,
       home_team:sports_teams!matches_home_team_id_fkey(*),
-      away_team:sports_teams!matches_away_team_id_fkey(*)
+      away_team:sports_teams!matches_away_team_id_fkey(*),
+      league:leagues(id, name, logo_url, logo_url_dark, tier)
     `,
     )
     .eq('status', 'scheduled')
@@ -81,7 +89,8 @@ async function fetchUpcomingMatches(params: UpcomingMatchesParams): Promise<Matc
       *,
       home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
       away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
-      sport:sports(id, name)
+      sport:sports(id, name),
+      league:leagues(id, name, logo_url, logo_url_dark, tier)
     `)
     .eq('status', 'scheduled')
     .gte('start_time', new Date().toISOString())

@@ -45,6 +45,13 @@ export interface TrendingBet {
       id: string
       name: string
     }
+    league?: {
+      id: string
+      name: string
+      logo_url: string | null
+      logo_url_dark: string | null
+      tier: number | null
+    } | null
   }
   creator?: {
     id: string
@@ -94,7 +101,8 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
       match:matches(*,
         home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
         away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
-        sport:sports(*)
+        sport:sports(*),
+        league:leagues(id, name, logo_url, logo_url_dark, tier)
       ),
       creator:users!bets_creator_id_fkey(id, username, avatar_url),
       bet_predictions(user_id, prediction, amount)
@@ -132,7 +140,8 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
         match:matches(*,
           home_team:sports_teams!matches_home_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
           away_team:sports_teams!matches_away_team_id_fkey(id, name, logo_url, cloudinary_logo_url, country),
-          sport:sports(*)
+          sport:sports(*),
+          league:leagues(id, name, logo_url, logo_url_dark, tier)
         ),
         creator:users!bets_creator_id_fkey(id, username, avatar_url),
         bet_predictions(user_id, prediction, amount)
@@ -174,7 +183,8 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
       fallbackResults = fallbackResults.filter((bet: any) => {
         const match = bet.match
         if (!match) return false
-        return match.league_id === params.leagueId || match.competition === params.leagueId
+        // Check league_id, league.id, or competition as fallback
+        return match.league_id === params.leagueId || match.league?.id === params.leagueId || match.competition === params.leagueId
       })
     }
 
@@ -209,11 +219,10 @@ async function fetchTrendingBets(params: TrendingBetsParams): Promise<TrendingBe
   }
   if (params.leagueId) {
     validBets = validBets.filter((bet: any) => {
-      // Check if match has league_id or if competition matches
       const match = bet.match
       if (!match) return false
-      // If league_id is available on match, use it; otherwise try to match by competition name
-      return match.league_id === params.leagueId || match.competition === params.leagueId
+      // Use league_id, league.id, or competition as fallback for filtering
+      return match.league_id === params.leagueId || match.league?.id === params.leagueId || match.competition === params.leagueId
     })
   }
 

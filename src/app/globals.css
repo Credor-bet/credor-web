@@ -143,4 +143,13 @@
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
   }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
 }

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { ChallengeService, type Challenge, type PredictionType } from '@/lib/challenge-service'
+import { useJoinBetMutation, useRejectBetMutation, useCancelBetMutation, useLeaveBetMutation } from '@/hooks/mutations'
+import type { Challenge, PredictionType } from '@/lib/challenge-service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,7 +38,7 @@ interface ChallengeCardProps {
 }
 
 export function ChallengeCard({ challenge, variant = 'default', showActions = true, onParticipationChange }: ChallengeCardProps) {
-  const [isLoading, setIsLoading] = useState(false)
+  // isLoading derived from mutation states instead of local useState
   const [showAcceptDialog, setShowAcceptDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [showLeaveDialog, setShowLeaveDialog] = useState(false)
@@ -56,6 +57,15 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
   const [prediction, setPrediction] = useState<PredictionType>(getDefaultPrediction())
   
   const { user, wallet } = useAuthStore()
+  
+  // Mutation hooks
+  const joinBetMutation = useJoinBetMutation()
+  const rejectBetMutation = useRejectBetMutation()
+  const cancelBetMutation = useCancelBetMutation()
+  const leaveBetMutation = useLeaveBetMutation()
+  
+  // Derive isLoading from mutation states
+  const isLoading = joinBetMutation.isPending || rejectBetMutation.isPending || cancelBetMutation.isPending || leaveBetMutation.isPending
   const publicEvent = isPublicEvent(challenge)
   const originLabel = getBetOriginLabel(challenge, 'Unknown user')
   const currency = wallet?.currency || 'CREDORR'
@@ -147,267 +157,224 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
       return
     }
 
-    let progressToast: string | number | undefined
+    const progressToast = toast.loading('Accepting challenge...')
     
-    try {
-      setIsLoading(true)
-      
-      // Show progress toast
-      progressToast = toast.loading('Accepting challenge...')
-      
-      await ChallengeService.acceptChallenge(challenge.id, parseFloat(stakeAmount), prediction)
-      
-      // Dismiss progress toast and show success
-      toast.dismiss(progressToast)
-      toast.success(`Challenge accepted! You staked ${formatCurrency(parseFloat(stakeAmount), currency)} on ${
-        prediction === 'home_win' ? challenge.match?.home_team.name :
-        prediction === 'away_win' ? challenge.match?.away_team.name : 'Draw'
-      }`, {
-        duration: 5000
-      })
-      
-      setShowAcceptDialog(false)
-      onParticipationChange?.(true)
-    } catch (error) {
-      console.error('Error accepting challenge:', error)
-      
-      // Always dismiss progress toast first if it exists
-      if (progressToast) {
-        toast.dismiss(progressToast)
-      }
-      
-      if (error instanceof Error) {
-        // Network errors
-        if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
-          toast.error('Network connection error. Please check your internet connection and try again.')
-        }
-        // Database validation errors - show specific user-friendly messages
-        else if (error.message.includes('Cannot join bet after match has started')) {
-          toast.error('⏰ This match has already started! You can no longer join this challenge.')
-        }
-        else if (error.message.includes('Bet not found or not pending')) {
-          toast.error('This challenge is no longer available or has already been accepted.')
-        }
-        else if (error.message.includes('Insufficient available balance')) {
-          toast.error('💰 Insufficient wallet balance to accept this challenge.')
-        }
-        else if (error.message.includes('Cannot join your own bet')) {
-          toast.error('You cannot accept your own challenge!')
-        }
-        else if (error.message.includes('This bet is not assigned to this user')) {
-          toast.error('This challenge is private and not assigned to you.')
-        }
-        else if (error.message.includes('Bet has reached maximum participants')) {
-          toast.error('This challenge is full - maximum participants reached.')
-        }
-        else if (error.message.includes('Bet amount is below the minimum required')) {
-          toast.error('Your stake amount is below the minimum required.')
-        }
-        else if (error.message.includes('Prediction must differ from creator')) {
-          toast.error('You must choose a different prediction than the creator.')
-        }
-        else if (error.message.includes('duplicate key value') || error.message.includes('already joined')) {
-          toast.info('You have already joined this bet.')
+    joinBetMutation.mutate(
+      {
+        betId: challenge.id,
+        amount: parseFloat(stakeAmount),
+        prediction,
+      },
+      {
+        onSuccess: () => {
+          toast.dismiss(progressToast)
+          toast.success(`Challenge accepted! You staked ${formatCurrency(parseFloat(stakeAmount), currency)} on ${
+            prediction === 'home_win' ? challenge.match?.home_team.name :
+            prediction === 'away_win' ? challenge.match?.away_team.name : 'Draw'
+          }`, {
+            duration: 5000
+          })
+          setShowAcceptDialog(false)
           onParticipationChange?.(true)
-        }
-        // Legacy error handling
-        else if (error.message.includes('Insufficient funds')) {
-          toast.error('💰 Insufficient wallet balance to accept this challenge.')
-        }
-        else if (error.message.includes('Challenge not found')) {
-          toast.error('This challenge is no longer available.')
-        }
-        else if (error.message.includes('already accepted')) {
-          toast.error('This challenge has already been accepted by someone else.')
-        }
-        else {
-          toast.error(`Failed to accept challenge: ${error.message}`)
-        }
-      } else {
-        toast.error('Failed to accept challenge. Please try again.')
+        },
+        onError: (error) => {
+          toast.dismiss(progressToast)
+          console.error('Error accepting challenge:', error)
+          
+          if (error instanceof Error) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
+              toast.error('Network connection error. Please check your internet connection and try again.')
+            }
+            else if (error.message.includes('Cannot join bet after match has started')) {
+              toast.error('⏰ This match has already started! You can no longer join this challenge.')
+            }
+            else if (error.message.includes('Bet not found or not pending')) {
+              toast.error('This challenge is no longer available or has already been accepted.')
+            }
+            else if (error.message.includes('Insufficient available balance')) {
+              toast.error('💰 Insufficient wallet balance to accept this challenge.')
+            }
+            else if (error.message.includes('Cannot join your own bet')) {
+              toast.error('You cannot accept your own challenge!')
+            }
+            else if (error.message.includes('This bet is not assigned to this user')) {
+              toast.error('This challenge is private and not assigned to you.')
+            }
+            else if (error.message.includes('Bet has reached maximum participants')) {
+              toast.error('This challenge is full - maximum participants reached.')
+            }
+            else if (error.message.includes('Bet amount is below the minimum required')) {
+              toast.error('Your stake amount is below the minimum required.')
+            }
+            else if (error.message.includes('Prediction must differ from creator')) {
+              toast.error('You must choose a different prediction than the creator.')
+            }
+            else if (error.message.includes('duplicate key value') || error.message.includes('already joined')) {
+              toast.info('You have already joined this bet.')
+              onParticipationChange?.(true)
+            }
+            else if (error.message.includes('Insufficient funds')) {
+              toast.error('💰 Insufficient wallet balance to accept this challenge.')
+            }
+            else if (error.message.includes('Challenge not found')) {
+              toast.error('This challenge is no longer available.')
+            }
+            else if (error.message.includes('already accepted')) {
+              toast.error('This challenge has already been accepted by someone else.')
+            }
+            else {
+              toast.error(`Failed to accept challenge: ${error.message}`)
+            }
+          } else {
+            toast.error('Failed to accept challenge. Please try again.')
+          }
+        },
       }
-    } finally {
-      setIsLoading(false)
-    }
+    )
   }
 
-  const handleRejectChallenge = async () => {
-    let progressToast: string | number | undefined
+  const handleRejectChallenge = () => {
+    const progressToast = toast.loading('Rejecting challenge...')
     
-    try {
-      setIsLoading(true)
-      
-      // Show progress toast
-      progressToast = toast.loading('Rejecting challenge...')
-      
-      await ChallengeService.rejectChallenge(challenge.id)
-      
-      // Dismiss progress toast and show success
-      toast.dismiss(progressToast)
-      const rejectionTarget = publicEvent ? PUBLIC_EVENT_LABEL : originLabel
-      toast.success(`Challenge rejected. ${rejectionTarget} has been notified.`, {
-        duration: 4000
-      })
-      
-      setShowRejectDialog(false)
-    } catch (error) {
-      console.error('Error rejecting challenge:', error)
-      
-      // Always dismiss progress toast first if it exists
-      if (progressToast) {
-        toast.dismiss(progressToast)
+    rejectBetMutation.mutate(
+      { betId: challenge.id },
+      {
+        onSuccess: () => {
+          toast.dismiss(progressToast)
+          const rejectionTarget = publicEvent ? PUBLIC_EVENT_LABEL : originLabel
+          toast.success(`Challenge rejected. ${rejectionTarget} has been notified.`, {
+            duration: 4000
+          })
+          setShowRejectDialog(false)
+        },
+        onError: (error) => {
+          toast.dismiss(progressToast)
+          console.error('Error rejecting challenge:', error)
+          
+          if (error instanceof Error) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
+              toast.error('Network connection error. Please check your internet connection and try again.')
+            } else if (error.message.includes('Challenge not found')) {
+              toast.error('This challenge is no longer available')
+            } else if (error.message.includes('already rejected')) {
+              toast.error('This challenge has already been rejected')
+            } else {
+              toast.error(`Failed to reject challenge: ${error.message}`)
+            }
+          } else {
+            toast.error('Failed to reject challenge. Please try again.')
+          }
+        },
       }
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
-          toast.error('Network connection error. Please check your internet connection and try again.')
-        } else if (error.message.includes('Challenge not found')) {
-          toast.error('This challenge is no longer available')
-        } else if (error.message.includes('already rejected')) {
-          toast.error('This challenge has already been rejected')
-        } else {
-          toast.error(`Failed to reject challenge: ${error.message}`)
-        }
-      } else {
-        toast.error('Failed to reject challenge. Please try again.')
-      }
-    } finally {
-      setIsLoading(false)
-    }
+    )
   }
 
-  const handleCancelChallenge = async () => {
-    let progressToast: string | number | undefined
+  const handleCancelChallenge = () => {
+    const progressToast = toast.loading('Cancelling challenge...')
     
-    try {
-      setIsLoading(true)
-      
-      // Show progress toast
-      progressToast = toast.loading('Cancelling challenge...')
-      
-      await ChallengeService.cancelChallenge(challenge.id)
-      
-      // Dismiss progress toast and show success
-      toast.dismiss(progressToast)
-      
-      const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
-      const refundAmount = userPrediction?.amount || 0
-      
-      toast.success(`Challenge cancelled successfully! ${refundAmount > 0 ? `${formatCurrency(refundAmount, currency)} has been refunded to your wallet.` : ''}`, {
-        duration: 5000
-      })
-      
-      setShowCancelDialog(false)
-      onParticipationChange?.(false)
-    } catch (error) {
-      console.error('Error canceling challenge:', error)
-      
-      // Always dismiss progress toast first if it exists
-      if (progressToast) {
-        toast.dismiss(progressToast)
+    const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
+    const refundAmount = userPrediction?.amount || 0
+    
+    cancelBetMutation.mutate(
+      { betId: challenge.id },
+      {
+        onSuccess: () => {
+          toast.dismiss(progressToast)
+          toast.success(`Challenge cancelled successfully! ${refundAmount > 0 ? `${formatCurrency(refundAmount, currency)} has been refunded to your wallet.` : ''}`, {
+            duration: 5000
+          })
+          setShowCancelDialog(false)
+          onParticipationChange?.(false)
+        },
+        onError: (error) => {
+          toast.dismiss(progressToast)
+          console.error('Error canceling challenge:', error)
+          
+          if (error instanceof Error) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
+              toast.error('Network connection error. Please check your internet connection and try again.')
+            }
+            else if (error.message.includes('Cannot cancel after match has started')) {
+              toast.error('⏰ Cannot cancel challenge - the match has already started!')
+            }
+            else if (error.message.includes('Bet not found or not pending/accepted')) {
+              toast.error('This challenge is no longer available or cannot be cancelled.')
+            }
+            else if (error.message.includes('Only participants can cancel the bet')) {
+              toast.error('🚫 You are not authorized to cancel this challenge.')
+            }
+            else if (error.message.includes('Only participants can cancel')) {
+              toast.error('🚫 You are not authorized to cancel this challenge.')
+            }
+            else if (error.message.includes('not found')) {
+              toast.error('This challenge no longer exists.')
+            }
+            else {
+              toast.error(`Failed to cancel challenge: ${error.message}`)
+            }
+          } else {
+            toast.error('Failed to cancel challenge. Please try again.')
+          }
+        },
       }
-      
-      if (error instanceof Error) {
-        // Network errors
-        if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
-          toast.error('Network connection error. Please check your internet connection and try again.')
-        }
-        // Database validation errors - show specific user-friendly messages
-        else if (error.message.includes('Cannot cancel after match has started')) {
-          toast.error('⏰ Cannot cancel challenge - the match has already started!')
-        }
-        else if (error.message.includes('Bet not found or not pending/accepted')) {
-          toast.error('This challenge is no longer available or cannot be cancelled.')
-        }
-        else if (error.message.includes('Only participants can cancel the bet')) {
-          toast.error('🚫 You are not authorized to cancel this challenge.')
-        }
-        // Legacy error handling
-        else if (error.message.includes('Only participants can cancel')) {
-          toast.error('🚫 You are not authorized to cancel this challenge.')
-        }
-        else if (error.message.includes('not found')) {
-          toast.error('This challenge no longer exists.')
-        }
-        else {
-          toast.error(`Failed to cancel challenge: ${error.message}`)
-        }
-      } else {
-        toast.error('Failed to cancel challenge. Please try again.')
-      }
-    } finally {
-      setIsLoading(false)
-    }
+    )
   }
 
-  const handleLeaveChallenge = async () => {
-    let progressToast: string | number | undefined
+  const handleLeaveChallenge = () => {
+    const progressToast = toast.loading('Leaving challenge...')
     
-    try {
-      setIsLoading(true)
-      
-      // Show progress toast
-      progressToast = toast.loading('Leaving challenge...')
-      
-      await ChallengeService.leaveChallenge(challenge.id)
-      
-      // Dismiss progress toast and show success
-      toast.dismiss(progressToast)
-      
-      const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
-      const refundAmount = userPrediction?.amount || 0
-      
-      toast.success(`You have left the challenge. ${formatCurrency(refundAmount, currency)} has been refunded to your wallet.`, {
-        duration: 5000
-      })
-      
-      setShowLeaveDialog(false)
-      onParticipationChange?.(false)
-    } catch (error) {
-      console.error('Error leaving challenge:', error)
-      
-      // Always dismiss progress toast first if it exists
-      if (progressToast) {
-        toast.dismiss(progressToast)
+    const userPrediction = challenge.bet_predictions?.find(p => p.user_id === user?.id)
+    const refundAmount = userPrediction?.amount || 0
+    
+    leaveBetMutation.mutate(
+      { betId: challenge.id },
+      {
+        onSuccess: () => {
+          toast.dismiss(progressToast)
+          toast.success(`You have left the challenge. ${formatCurrency(refundAmount, currency)} has been refunded to your wallet.`, {
+            duration: 5000
+          })
+          setShowLeaveDialog(false)
+          onParticipationChange?.(false)
+        },
+        onError: (error) => {
+          toast.dismiss(progressToast)
+          console.error('Error leaving challenge:', error)
+          
+          if (error instanceof Error) {
+            if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
+              toast.error('Network connection error. Please check your internet connection and try again.')
+            }
+            else if (error.message.includes('Cannot leave bet after match has started')) {
+              toast.error('⏰ Cannot leave challenge - the match has already started!')
+            }
+            else if (error.message.includes('Bet not found')) {
+              toast.error('This challenge no longer exists.')
+            }
+            else if (error.message.includes('This function is for public bets only')) {
+              toast.error('Cannot leave this challenge - it\'s a private 1v1 challenge. Use cancel instead.')
+            }
+            else if (error.message.includes('User is not a participant in this bet')) {
+              toast.error('🚫 You are not a participant in this challenge.')
+            }
+            else if (error.message.includes('Cannot leave after match has started')) {
+              toast.error('⏰ Cannot leave challenge - the match has already started!')
+            }
+            else if (error.message.includes('not a participant')) {
+              toast.error('🚫 You are not a participant in this challenge.')
+            }
+            else if (error.message.includes('not found')) {
+              toast.error('This challenge no longer exists.')
+            }
+            else {
+              toast.error(`Failed to leave challenge: ${error.message}`)
+            }
+          } else {
+            toast.error('Failed to leave challenge. Please try again.')
+          }
+        },
       }
-      
-      if (error instanceof Error) {
-        // Network errors
-        if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_CLOSED')) {
-          toast.error('Network connection error. Please check your internet connection and try again.')
-        }
-        // Database validation errors - show specific user-friendly messages
-        else if (error.message.includes('Cannot leave bet after match has started')) {
-          toast.error('⏰ Cannot leave challenge - the match has already started!')
-        }
-        else if (error.message.includes('Bet not found')) {
-          toast.error('This challenge no longer exists.')
-        }
-        else if (error.message.includes('This function is for public bets only')) {
-          toast.error('Cannot leave this challenge - it\'s a private 1v1 challenge. Use cancel instead.')
-        }
-        else if (error.message.includes('User is not a participant in this bet')) {
-          toast.error('🚫 You are not a participant in this challenge.')
-        }
-        // Legacy error handling
-        else if (error.message.includes('Cannot leave after match has started')) {
-          toast.error('⏰ Cannot leave challenge - the match has already started!')
-        }
-        else if (error.message.includes('not a participant')) {
-          toast.error('🚫 You are not a participant in this challenge.')
-        }
-        else if (error.message.includes('not found')) {
-          toast.error('This challenge no longer exists.')
-        }
-        else {
-          toast.error(`Failed to leave challenge: ${error.message}`)
-        }
-      } else {
-        toast.error('Failed to leave challenge. Please try again.')
-      }
-    } finally {
-      setIsLoading(false)
-    }
+    )
   }
 
   if (variant === 'compact') {
@@ -592,11 +559,11 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
             <div className="flex items-center justify-center text-sm text-muted-foreground">
               <Calendar className="h-4 w-4 mr-1" />
               {formatDate(challenge.match.start_time)}
-              {(challenge.match.competition || challenge.match.sport?.name) && (
+              {(challenge.match.league?.name || challenge.match.competition || challenge.match.sport?.name) && (
                 <>
                   <span className="mx-2">•</span>
                   <Badge variant="outline" className="text-xs">
-                    {challenge.match.competition || challenge.match.sport?.name}
+                    {challenge.match.league?.name || challenge.match.competition || challenge.match.sport?.name}
                   </Badge>
                 </>
               )}

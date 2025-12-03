@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAuthStore, useBettingStore, useMatchStore } from '@/lib/store'
-import { ChallengeService, type Challenge } from '@/lib/challenge-service'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useTrendingBets, type TrendingBet } from '@/hooks/queries/use-trending-bets'
+import { useBetSearchQuery, useBetFiltersActions } from '@/store/bet-filters-store'
+import type { Challenge } from '@/lib/challenge-service'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -22,7 +24,8 @@ import {
 } from 'lucide-react'
 import { CreateChallengeDialog } from './create-challenge-dialog'
 import { ChallengeCard } from './challenge-card'
-import { toast } from 'sonner'
+import { ActiveBetsModal } from './active-bets-modal'
+import { PendingBetsModal } from './pending-bets-modal'
 import { useWebSocket } from '@/hooks/use-websocket'
 import { shouldAutoConnect } from '@/lib/websocket-config'
 import { WebSocketTest } from '@/components/debug/websocket-test'
@@ -35,14 +38,28 @@ import { getBetOriginLabel, isPublicEvent } from '@/lib/bet-display'
 
 export function ChallengesPage() {
   const [activeTab, setActiveTab] = useState('pending')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [trendingChallenges, setTrendingChallenges] = useState<Challenge[]>([])
+  const [isActiveBetsModalOpen, setIsActiveBetsModalOpen] = useState(false)
+  const [isPendingBetsModalOpen, setIsPendingBetsModalOpen] = useState(false)
+  
+  // Use Zustand store for search query (UI state)
+  const searchQuery = useBetSearchQuery()
+  const { setSearchQuery } = useBetFiltersActions()
+  
+  // Use React Query for trending bets (server state)
+  const { 
+    data: trendingBetsData = [], 
+    isLoading: isTrendingLoading,
+    refetch: refetchTrending 
+  } = useTrendingBets({ limit: 20 })
   
   const { user } = useAuthStore()
   const { activeBets, betHistory, refreshBets } = useBettingStore()
   const { getLiveMatch } = useMatchStore()
-  
+
+  // Filter active bets to exclude pending bets (only show accepted bets)
+  // Pending bets should only appear in the "Pending" card
+  const acceptedBets = activeBets.filter(bet => bet.status === 'accepted')
+
   // Helper function to get current match status (live data takes priority)
   const getCurrentMatchStatus = (challenge: Challenge): string => {
     if (!challenge.match) return 'unknown'
@@ -111,8 +128,23 @@ export function ChallengesPage() {
     )
   })
 
+  // Convert trending bets to Challenge type and filter for active matches
+  const trendingChallenges: Challenge[] = (trendingBetsData as TrendingBet[])
+    .filter((bet) => {
+      const currentStatus = getCurrentMatchStatus(bet as unknown as Challenge)
+      return currentStatus !== 'cancelled' && 
+             currentStatus !== 'completed' &&
+             currentStatus === 'scheduled'
+    })
+    .map((bet) => ({
+      ...bet,
+      match: bet.match,
+      creator: bet.creator,
+      bet_predictions: bet.bet_predictions,
+      isParticipant: bet.isParticipant,
+    })) as Challenge[]
+
   useEffect(() => {
-    loadTrendingChallenges()
     refreshBets()
   }, [refreshBets])
 
@@ -156,29 +188,9 @@ export function ChallengesPage() {
     subscribeToMatches()
   }, [isConnected, currentChallenges.length, trendingChallenges.length, subscribeToMatch])
 
-  const loadTrendingChallenges = async () => {
-    try {
-      setIsLoading(true)
-      const trending = await ChallengeService.getTrendingChallenges(20)
-      // Filter out challenges for cancelled or completed matches
-      const activeTrending = trending.filter(challenge => {
-        const currentStatus = getCurrentMatchStatus(challenge)
-        return currentStatus !== 'cancelled' && 
-               currentStatus !== 'completed' &&
-               currentStatus === 'scheduled' // Only show pending challenges for scheduled matches
-      })
-      setTrendingChallenges(activeTrending)
-    } catch (error) {
-      console.error('Error loading trending challenges:', error)
-      toast.error('Failed to load trending challenges')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const filteredChallenges = (challenges: Challenge[]) => {
-    if (!searchTerm) return challenges
-    const query = searchTerm.toLowerCase()
+    if (!searchQuery) return challenges
+    const query = searchQuery.toLowerCase()
     
     return challenges.filter(challenge => {
       const originLabel = getBetOriginLabel(challenge, '').toLowerCase()
@@ -193,16 +205,16 @@ export function ChallengesPage() {
   }
 
   return (
-    <div className="md:ml-64 p-4 md:p-6 space-y-6">
+    <div className="md:ml-64 p-4 md:p-8 space-y-8 bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Challenges</h1>
-          <div className="flex items-center space-x-3">
-            <p className="text-muted-foreground">Manage active challenges and discover new opportunities</p>
-            
-            {/* Connection Status Indicator */}
-            <div className="flex items-center space-x-1">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Challenges</h1>
+          <p className="text-muted-foreground">Manage active challenges and discover new opportunities</p>
+          
+          {/* Connection Status Indicator - Development Only */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="flex items-center space-x-1 mt-2">
               {isConnected ? (
                 <>
                   <Wifi className="h-4 w-4 text-green-500" />
@@ -215,11 +227,11 @@ export function ChallengesPage() {
                 </>
               )}
             </div>
-          </div>
+          )}
         </div>
         
         <CreateChallengeDialog>
-          <Button className="bg-green-600 hover:bg-green-700">
+          <Button className="bg-green-600 hover:bg-green-700 shadow-sm">
             <Plus className="h-4 w-4 mr-2" />
             New Challenge
           </Button>
@@ -227,124 +239,108 @@ export function ChallengesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${process.env.NODE_ENV === 'development' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-4 mb-6`}>
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow bg-white"
+          onClick={() => setIsActiveBetsModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Challenges</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Active Bets</CardTitle>
+            <Target className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeChallenges.length}</div>
+            <div className="text-2xl font-bold">{acceptedBets.length}</div>
             <p className="text-xs text-muted-foreground">
-              Currently in progress
+              Accepted bets • Tap to view all
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow bg-white"
+          onClick={() => setIsPendingBetsModalOpen(true)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{pendingChallenges.length}</div>
             <p className="text-xs text-muted-foreground">
-              Awaiting response
+              Awaiting response • Tap to view all
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Your Challenges</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{currentChallenges.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Total current challenges
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Trending</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{trendingChallenges.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Public challenges
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Live Updates</CardTitle>
-            {isConnected ? (
-              <Wifi className="h-4 w-4 text-green-500" />
-            ) : (
-              <WifiOff className="h-4 w-4 text-red-500" />
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
-              {isConnected ? 'ON' : 'OFF'}
-            </div>
-            <p className="text-xs text-muted-foreground mb-2">
-              {isConnected ? 'Real-time match scores' : 'No live connection'}
-            </p>
-            {!isConnected && (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={connect}
-                className="w-full"
-              >
-                <Wifi className="h-3 w-3 mr-1" />
-                Connect
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        {/* Live Updates Card - Development Only */}
+        {process.env.NODE_ENV === 'development' && (
+          <Card className="hover:shadow-md transition-shadow bg-white">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Live Updates</CardTitle>
+              {isConnected ? (
+                <Wifi className="h-4 w-4 text-green-500" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-red-500" />
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                {isConnected ? 'ON' : 'OFF'}
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                {isConnected ? 'Real-time match scores' : 'No live connection'}
+              </p>
+              {!isConnected && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={connect}
+                  className="w-full"
+                >
+                  <Wifi className="h-3 w-3 mr-1" />
+                  Connect
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-             {/* Debug Components - Development Only */}
-       {process.env.NODE_ENV === 'development' && (
-         <div className="space-y-6">
-           <ServerStatusCard />
-           <ServerDiagnostic />
-           <ConnectionTest />
-           <LiveScoreTest />
-           <MatchDebug />
-           <WebSocketTest />
-         </div>
-       )}
+      {/* Debug Components - Development Only */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="space-y-6">
+          <ServerStatusCard />
+          <ServerDiagnostic />
+          <ConnectionTest />
+          <LiveScoreTest />
+          <MatchDebug />
+          <WebSocketTest />
+        </div>
+      )}
 
        {/* Search and Filter */}
-       <div className="flex items-center space-x-4">
+       <div className="flex items-center space-x-4 mb-6">
          <div className="relative flex-1 max-w-md">
            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
            <Input
-             placeholder="Search challenges..."
-             value={searchTerm}
-             onChange={(e) => setSearchTerm(e.target.value)}
+             placeholder="Search challenges by team, sport, or opponent..."
+             value={searchQuery}
+             onChange={(e) => setSearchQuery(e.target.value)}
              className="pl-10"
            />
          </div>
          
-         <Button variant="outline" size="sm">
+         <Button variant="outline" size="sm" className="shadow-sm">
            <Filter className="h-4 w-4 mr-2" />
            Filter
          </Button>
        </div>
 
       {/* Challenges Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="pending">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1">
+          <TabsTrigger value="pending" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <Clock className="h-4 w-4 mr-2" />
             Pending
             {pendingChallenges.length > 0 && (
               <Badge variant="destructive" className="ml-2">
@@ -352,7 +348,8 @@ export function ChallengesPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="active">
+          <TabsTrigger value="active" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <Trophy className="h-4 w-4 mr-2" />
             Active
             {activeChallenges.length > 0 && (
               <Badge variant="default" className="ml-2">
@@ -360,28 +357,32 @@ export function ChallengesPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="trending">
+          <TabsTrigger value="trending" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            <TrendingUp className="h-4 w-4 mr-2" />
             Trending
-            <TrendingUp className="h-3 w-3 ml-1" />
           </TabsTrigger>
         </TabsList>
 
 
 
-        <TabsContent value="pending" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Pending Challenges</h3>
-            <Badge variant="outline" className="text-yellow-600">
-              {pendingChallenges.length} waiting
-            </Badge>
+        <TabsContent value="pending" className="space-y-4 mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-gray-900">Pending Challenges</h3>
+            {pendingChallenges.length > 0 && (
+              <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                {pendingChallenges.length} waiting
+              </Badge>
+            )}
           </div>
           
           {filteredChallenges(pendingChallenges).length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Clock className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No pending challenges</h3>
-                <p className="text-muted-foreground text-center">
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="rounded-full bg-yellow-100 p-4 mb-4">
+                  <Clock className="h-8 w-8 text-yellow-600" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2 text-gray-900">No pending challenges</h3>
+                <p className="text-muted-foreground text-center max-w-md">
                   All caught up! No challenges waiting for your response.
                 </p>
               </CardContent>
@@ -395,20 +396,24 @@ export function ChallengesPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="active" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Active Challenges</h3>
-            <Badge variant="outline" className="text-blue-600">
-              {activeChallenges.length} active
-            </Badge>
+        <TabsContent value="active" className="space-y-4 mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-gray-900">Active Challenges</h3>
+            {activeChallenges.length > 0 && (
+              <Badge variant="outline" className="text-blue-600 border-blue-600">
+                {activeChallenges.length} active
+              </Badge>
+            )}
           </div>
           
           {filteredChallenges(activeChallenges).length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Users className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No active challenges</h3>
-                <p className="text-muted-foreground text-center">
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="rounded-full bg-blue-100 p-4 mb-4">
+                  <Users className="h-8 w-8 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2 text-gray-900">No active challenges</h3>
+                <p className="text-muted-foreground text-center max-w-md">
                   No challenges currently in progress. Create or accept one to get started!
                 </p>
               </CardContent>
@@ -422,15 +427,16 @@ export function ChallengesPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="trending" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Trending Public Challenges</h3>
-            <Button variant="outline" size="sm" onClick={loadTrendingChallenges}>
+        <TabsContent value="trending" className="space-y-4 mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-gray-900">Trending Public Challenges</h3>
+            <Button variant="outline" size="sm" onClick={() => refetchTrending()} className="shadow-sm">
+              <TrendingUp className="h-4 w-4 mr-2" />
               Refresh
             </Button>
           </div>
           
-          {isLoading ? (
+          {isTrendingLoading ? (
             <div className="grid gap-4">
               {[...Array(3)].map((_, i) => (
                 <Card key={i}>
@@ -445,11 +451,13 @@ export function ChallengesPage() {
               ))}
             </div>
           ) : filteredChallenges(trendingChallenges).length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No trending challenges</h3>
-                <p className="text-muted-foreground text-center">
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="rounded-full bg-orange-100 p-4 mb-4">
+                  <TrendingUp className="h-8 w-8 text-orange-600" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2 text-gray-900">No trending challenges</h3>
+                <p className="text-muted-foreground text-center max-w-md">
                   No public challenges available right now. Check back later!
                 </p>
               </CardContent>
@@ -463,6 +471,18 @@ export function ChallengesPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Active Bets Modal */}
+      <ActiveBetsModal
+        isOpen={isActiveBetsModalOpen}
+        onClose={() => setIsActiveBetsModalOpen(false)}
+      />
+
+      {/* Pending Bets Modal */}
+      <PendingBetsModal
+        isOpen={isPendingBetsModalOpen}
+        onClose={() => setIsPendingBetsModalOpen(false)}
+      />
     </div>
   )
 }

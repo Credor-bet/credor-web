@@ -94,12 +94,14 @@ export async function applyPrivacyRulesToBets<T extends { bet_predictions?: BetP
       return bet as BetWithPredictions<T> & { bet_predictions?: BetPredictionWithPrivacy[] }
     }
 
-    // Check if this is a private bet (has opponent_id set)
-    // Private bets should show both participants' data regardless of privacy settings
+    // Check if this is a private/1v1 bet (has opponent_id set)
     const isPrivateBet = (bet as any).opponent_id !== null && (bet as any).opponent_id !== undefined
+    
+    // Check if viewer is a participant in this 1v1 bet
+    const viewerIsParticipant = viewerId && bet.bet_predictions?.some(p => p.user_id === viewerId)
 
-    // For private bets, skip privacy filtering - show all data for both participants
-    if (isPrivateBet) {
+    // For 1v1 bets where viewer is a participant, skip privacy filtering - show all data for both participants
+    if (isPrivateBet && viewerIsParticipant) {
       const unfilteredPredictions: BetPredictionWithPrivacy[] = bet.bet_predictions.map(prediction => ({
         user_id: prediction.user_id,
         prediction: prediction.prediction,

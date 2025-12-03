@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { ClientProvider } from "@/components/providers/client-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
 
 // Using system fonts to avoid runtime font fetch issues during development
 
@@ -19,11 +20,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`antialiased`}>
-        <ClientProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </ClientProvider>
+        <QueryProvider>
+          <ClientProvider>
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </ClientProvider>
+        </QueryProvider>
       </body>
     </html>
   );

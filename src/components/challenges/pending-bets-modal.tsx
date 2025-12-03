@@ -11,31 +11,28 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Target, Eye } from 'lucide-react'
+import { Clock, Eye } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
-interface ActiveBetsModalProps {
+interface PendingBetsModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
-export function ActiveBetsModal({ isOpen, onClose }: ActiveBetsModalProps) {
+export function PendingBetsModal({ isOpen, onClose }: PendingBetsModalProps) {
   const router = useRouter()
   const { user } = useAuthStore()
   const bettingStore = useBettingStore()
   const allActiveBets = Array.isArray(bettingStore?.activeBets) ? bettingStore.activeBets : []
-  // Filter out pending bets - only show accepted bets
-  // Pending bets should only appear in the "Pending" card
-  const activeBets = allActiveBets.filter(bet => bet.status === 'accepted')
+  // Filter for pending bets only
+  const pendingBets = allActiveBets.filter(bet => bet.status === 'pending')
 
   // Helper function to get bet indicator
   const getBetIndicator = (bet: { creator_id: string; opponent_id: string | null; status: string }) => {
     const isCreator = bet.creator_id === user?.id
     const isOpponent = bet.opponent_id === user?.id
     
-    if (bet.status === 'accepted') {
-      return { color: 'bg-green-500', text: 'Accepted' }
-    } else if (bet.status === 'pending') {
+    if (bet.status === 'pending') {
       if (isCreator) {
         return { color: 'bg-yellow-500', text: 'Waiting for opponent' }
       } else if (isOpponent) {
@@ -75,23 +72,23 @@ export function ActiveBetsModal({ isOpen, onClose }: ActiveBetsModalProps) {
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
-            <Target className="h-5 w-5" />
-            <span>Active Bets</span>
+            <Clock className="h-5 w-5" />
+            <span>Pending Bets</span>
           </DialogTitle>
           <DialogDescription>
-            Your accepted bets ({activeBets.length} {activeBets.length === 1 ? 'bet' : 'bets'})
+            Bets awaiting response ({pendingBets.length} {pendingBets.length === 1 ? 'bet' : 'bets'})
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 mt-4">
-          {activeBets.length === 0 ? (
+          {pendingBets.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="font-medium mb-2">No active bets</p>
-              <p className="text-sm">Create your first bet to get started!</p>
+              <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="font-medium mb-2">No pending bets</p>
+              <p className="text-sm">All caught up! No bets waiting for response.</p>
             </div>
           ) : (
-            activeBets.map((bet: any) => {
+            pendingBets.map((bet: any) => {
               const indicator = getBetIndicator(bet)
               const role = getBetRole(bet)
               const matchInfo = getMatchInfo(bet)

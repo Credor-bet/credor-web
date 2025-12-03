@@ -386,6 +386,40 @@ export default function HistoryPage() {
               : originLabel
             const myPredictionLabel = getPredictionDisplay(userPredictionEntry, bet.matches)
 
+            // Determine user's net result for display in the preview card:
+            // - For settled bets where user was correct: show an estimated payout (total return)
+            // - For settled bets where user was wrong and there were winners: show their stake as a loss
+            // - Otherwise (pending/accepted/cancelled/draw/push): show their original stake
+            let previewStakeAmount = userPredictionEntry?.amount ?? 0
+
+            if (bet.status === 'settled' && userPredictionEntry && bet.matches?.match_result) {
+              const matchResult = bet.matches.match_result
+              const userWon = userPredictionEntry.prediction === matchResult
+
+              const allPredictions = (bet.bet_predictions ?? []).map(p => ({
+                user_id: p.user_id,
+                amount: p.amount ?? 0,
+                prediction: p.prediction,
+              }))
+
+              const totalPool = allPredictions.reduce((sum, p) => sum + (p.amount || 0), 0)
+              const winningSideTotal = allPredictions
+                .filter(p => p.prediction === matchResult)
+                .reduce((sum, p) => sum + (p.amount || 0), 0)
+
+              if (totalPool > 0 && winningSideTotal > 0) {
+                if (userWon) {
+                  // Show approximate total return: user's stake plus their share of the losing side
+                  const share = (userPredictionEntry.amount ?? 0) / winningSideTotal
+                  const losersPool = totalPool - winningSideTotal
+                  previewStakeAmount = (userPredictionEntry.amount ?? 0) + share * losersPool
+                } else {
+                  // User lost: show their original stake as the amount lost
+                  previewStakeAmount = userPredictionEntry.amount ?? 0
+                }
+              }
+            }
+
             return (
             <Card 
               key={bet.id} 
@@ -534,18 +568,18 @@ export default function HistoryPage() {
                        
 
                        
-                                               <div className="flex items-center space-x-2">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${outcomeBackground}`}>
-                        {bet.status === 'settled' ? (
-                          <Trophy className={`h-3 w-3 ${outcomeIconColor}`} />
-                        ) : (
-                          <Clock className="h-3 w-3 text-gray-600" />
-                        )}
+                       <div className="flex items-center space-x-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${outcomeBackground}`}>
+                          {bet.status === 'settled' ? (
+                            <Trophy className={`h-3 w-3 ${outcomeIconColor}`} />
+                          ) : (
+                            <Clock className="h-3 w-3 text-gray-600" />
+                          )}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800">
+                          {formatCurrency(previewStakeAmount, currency)}
+                        </span>
                       </div>
-                         <span className="text-sm font-semibold text-gray-800">
-                           {formatCurrency(bet.min_opponent_amount, currency)}
-                         </span>
-                       </div>
                      </div>
                   </div>
                 </div>

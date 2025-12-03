@@ -127,6 +127,8 @@ export default function ChallengeDetailsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [stakeAmount, setStakeAmount] = useState('')
   const [prediction, setPrediction] = useState<PredictionType>('home_win')
+  const [houseFeePercent, setHouseFeePercent] = useState<number | null>(null)
+  const [starterBonusPercent, setStarterBonusPercent] = useState<number | null>(null)
 
   const { user, wallet } = useAuthStore()
   const currency = wallet?.currency || 'CREDORR'
@@ -215,6 +217,25 @@ export default function ChallengeDetailsPage() {
     }
   }
 
+  // Filter and sort participant activity for public bets
+  const filteredParticipantActivity = useMemo(() => {
+    if (!participantsWithDetails || participantsWithDetails.length === 0) return []
+
+    let list = participantsWithDetails
+
+    // Filter by prediction type if requested and prediction is visible
+    if (predictionFilter !== 'all') {
+      list = list.filter(
+        (p) =>
+          !p.isPredictionHidden &&
+          p.prediction === predictionFilter,
+      )
+    }
+
+    // Sort by stake amount (visible or raw) descending
+    return [...list].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))
+  }, [participantsWithDetails, predictionFilter])
+
   const getBetResult = () => {
     if (!bet || !user || bet.status !== 'settled' || !bet.matches?.match_result) {
       return null
@@ -245,10 +266,128 @@ export default function ChallengeDetailsPage() {
 
   const getTotalStake = () => {
     if (!bet?.bet_predictions || bet.bet_predictions.length === 0) {
-      return bet?.min_opponent_amount || 0
+      // If no one has joined yet, total stake should be 0
+      // (min_opponent_amount is just the minimum required stake, not actual locked stake)
+      return 0
     }
     return bet.bet_predictions.reduce((sum, p) => sum + (p.amount ?? 0), 0)
   }
+
+  // Estimate potential payout for the current user based on:
+  // - current participants
+  // - their entered stakeAmount (if any), or existing stake
+  // - current fee settings (house fee + starter bonus)
+  const computePotentialPayout = (
+    baseAmount: number,
+    outcome: PredictionType,
+    useHypotheticalUserStake: boolean,
+  ): number | null => {
+    if (!bet || !houseFeePercent || houseFeePercent < 0) return null
+    if (!baseAmount || Number.isNaN(baseAmount) || baseAmount <= 0) return null
+
+    // Build a working copy of predictions including the hypothetical/current user stake
+    const existingPredictions = (bet.bet_predictions ?? []).map((p) => ({
+      user_id: p.user_id,
+      amount: p.amount ?? 0,
+      prediction: p.prediction as PredictionType,
+    }))
+
+    let hasUserPrediction = !!user && existingPredictions.some((p) => p.user_id === user.id)
+
+    const userIdForCalc = user?.id ?? 'current_user'
+
+    let predictionsForCalc = existingPredictions
+    if (useHypotheticalUserStake && hasUserPrediction) {
+      // Replace user's existing amount with the hypothetical amount
+      predictionsForCalc = predictionsForCalc.map((p) =>
+        p.user_id === userIdForCalc ? { ...p, amount: baseAmount, prediction: outcome } : p,
+      )
+    } else if (useHypotheticalUserStake && !hasUserPrediction) {
+      // User has not joined yet - add their hypothetical prediction
+      predictionsForCalc = [
+        ...predictionsForCalc,
+        {
+          user_id: userIdForCalc,
+          amount: baseAmount,
+          prediction: outcome,
+        },
+      ]
+    }
+
+    const totalPool = predictionsForCalc.reduce((sum, p) => sum + (p.amount || 0), 0)
+
+    const winningSideTotal = predictionsForCalc
+      .filter((p) => p.prediction === outcome)
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
+
+    if (winningSideTotal <= 0 || totalPool <= 0) return null
+
+    // House fee
+    let v_house_fee = totalPool * houseFeePercent
+    if (v_house_fee > totalPool) v_house_fee = totalPool
+
+    let distributablePool = totalPool - v_house_fee
+
+    // Starter bonus logic (only if configured and if creator is on winning side)
+    const starterPercent = starterBonusPercent && starterBonusPercent > 0 ? starterBonusPercent : 0
+    let creatorBonus = 0
+
+    if (starterPercent > 0 && bet.creator_id) {
+      const creatorWinningStake = predictionsForCalc
+        .filter((p) => p.user_id === bet.creator_id && p.prediction === outcome)
+        .reduce((sum, p) => sum + (p.amount || 0), 0)
+
+      if (creatorWinningStake > 0) {
+        creatorBonus = distributablePool * starterPercent
+        // Cap bonus to 50% of what creator would otherwise win
+        const creatorShareWithoutBonus = (creatorWinningStake / winningSideTotal) * distributablePool
+        const maxBonus = creatorShareWithoutBonus * 0.5
+        if (creatorBonus > maxBonus) creatorBonus = maxBonus
+
+        distributablePool -= creatorBonus
+      }
+    }
+
+    // User's share
+    const userStake = predictionsForCalc
+      .filter((p) => p.user_id === userIdForCalc && p.prediction === outcome)
+      .reduce((sum, p) => sum + (p.amount || 0), 0)
+
+    if (userStake <= 0) return null
+
+    let userPayout = (userStake / winningSideTotal) * distributablePool
+
+    // If user is the creator and on winning side, include potential creator bonus
+    if (bet.creator_id && bet.creator_id === userIdForCalc && creatorBonus > 0) {
+      userPayout += creatorBonus
+    }
+
+    if (!Number.isFinite(userPayout) || userPayout <= 0) return null
+
+    return userPayout
+  }
+
+  const potentialPayout = useMemo(() => {
+    if (!bet || !prediction) return null
+    const amount = parseFloat(stakeAmount || '0')
+    return computePotentialPayout(amount, prediction, true)
+  }, [bet, prediction, stakeAmount, houseFeePercent, starterBonusPercent, user])
+
+  // Potential payout for the user's current position (on the main page),
+  // based on their existing stake and prediction in this bet.
+  const currentPositionPayout = useMemo(() => {
+    if (!bet || !user) return null
+    const existingUserPrediction = bet.bet_predictions?.find((p) => p.user_id === user.id)
+    if (!existingUserPrediction || !existingUserPrediction.amount || !existingUserPrediction.prediction) {
+      return null
+    }
+
+    return computePotentialPayout(
+      existingUserPrediction.amount,
+      existingUserPrediction.prediction as PredictionType,
+      false,
+    )
+  }, [bet, user, houseFeePercent, starterBonusPercent])
 
   // Participant / prediction helpers
   const publicEvent = bet ? isPublic : false
@@ -339,13 +478,40 @@ export default function ChallengeDetailsPage() {
     return 'home_win'
   }
   
-  // Initialize stake amount and prediction when bet loads
+  // Initialize prediction when bet loads (do not prefill stake amount to avoid awkward UX)
   useEffect(() => {
-    if (bet && !stakeAmount) {
-      setStakeAmount(bet.min_opponent_amount.toString())
+    if (bet) {
       setPrediction(getDefaultPrediction())
     }
-  }, [bet, stakeAmount])
+  }, [bet])
+
+  // Load current bet fee settings (house fee + starter bonus)
+  useEffect(() => {
+    const loadFees = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('current_bet_fees')
+          .select('house_fee_percent, starter_bonus_percent')
+          .single()
+
+        if (!error && data) {
+          setHouseFeePercent(Number(data.house_fee_percent ?? 0.1))
+          setStarterBonusPercent(Number(data.starter_bonus_percent ?? 0.03))
+        } else {
+          // Fallback to sane defaults if not configured
+          setHouseFeePercent((prev) => prev ?? 0.1)
+          setStarterBonusPercent((prev) => prev ?? 0.03)
+        }
+      } catch (err) {
+        console.error('Error loading bet fee settings:', err)
+        // Fallback defaults
+        setHouseFeePercent((prev) => prev ?? 0.1)
+        setStarterBonusPercent((prev) => prev ?? 0.03)
+      }
+    }
+
+    loadFees()
+  }, [])
   
   // For private bets, if user doesn't have access, redirect them
   useEffect(() => {
@@ -801,14 +967,22 @@ export default function ChallengeDetailsPage() {
                           <p className="text-sm text-gray-600">
                             Stake: <span className="font-semibold">{userAmountDisplay}</span>
                           </p>
+                          {currentPositionPayout && (
+                            <p className="text-sm text-gray-600">
+                              Potential payout if you win:{' '}
+                              <span className="font-semibold">
+                                {formatCurrency(currentPositionPayout, currency)}
+                              </span>
+                            </p>
+                          )}
                         </CardContent>
                       </Card>
 
-                      {/* Only show Opponent / Market card for private bets */}
+                      {/* Only show Opponent card for private bets */}
                       {!publicEvent && (
                         <Card className="border border-gray-200">
                           <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Opponent / Market</CardTitle>
+                            <CardTitle className="text-sm font-medium">Opponent</CardTitle>
                           </CardHeader>
                           <CardContent className="space-y-2">
                             <p className="text-sm text-gray-600">
@@ -837,19 +1011,51 @@ export default function ChallengeDetailsPage() {
                 <>
                   <Separator className="my-6" />
                   <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Participant Activity</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Participant Activity</h3>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <Button
+                          size="sm"
+                          variant={predictionFilter === 'all' ? 'default' : 'outline'}
+                          onClick={() => setPredictionFilter('all')}
+                        >
+                          All
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={predictionFilter === 'home_win' ? 'default' : 'outline'}
+                          onClick={() => setPredictionFilter('home_win')}
+                        >
+                          {bet.matches?.home_team?.name || 'Home'} win
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={predictionFilter === 'draw' ? 'default' : 'outline'}
+                          onClick={() => setPredictionFilter('draw')}
+                        >
+                          Draw
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={predictionFilter === 'away_win' ? 'default' : 'outline'}
+                          onClick={() => setPredictionFilter('away_win')}
+                        >
+                          {bet.matches?.away_team?.name || 'Away'} win
+                        </Button>
+                      </div>
+                    </div>
                     {isLoadingParticipants ? (
                       <div className="text-center text-muted-foreground py-8">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
                         <p className="mt-2 text-sm">Loading participants...</p>
                       </div>
-                    ) : participantsWithDetails.length === 0 ? (
+                    ) : filteredParticipantActivity.length === 0 ? (
                       <div className="text-center text-muted-foreground py-8">
-                        <p className="text-sm">No participants yet.</p>
+                        <p className="text-sm">No participants for this filter.</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {participantsWithDetails.map((participant) => (
+                        {filteredParticipantActivity.map((participant) => (
                           <Card key={participant.user_id} className="border border-gray-200">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between">
@@ -1032,6 +1238,17 @@ export default function ChallengeDetailsPage() {
                 placeholder={`Minimum: ${formatCurrency(bet?.min_opponent_amount || 0, currency)}`}
               />
             </div>
+            {potentialPayout && (
+              <div className="text-xs text-muted-foreground">
+                Potential payout if you win:{' '}
+                <span className="font-semibold text-foreground">
+                  {formatCurrency(potentialPayout, currency)}
+                </span>
+                <span className="block">
+                  (after house fees, based on current participants and assuming your selected outcome wins)
+                </span>
+              </div>
+            )}
             <div>
               <Label htmlFor="prediction">Your Prediction</Label>
               <select

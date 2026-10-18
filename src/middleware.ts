@@ -36,14 +36,27 @@ export async function middleware(req: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
   const { pathname } = req.nextUrl
 
-  // Define route types
   const authRoutes = ['/signin', '/signup']
-  const protectedRoutes = ['/dashboard']
+  const sessionRequiredPrefixes = [
+    '/dashboard/wallet',
+    '/dashboard/friends',
+    '/dashboard/settings',
+    '/profile-completion',
+    '/sport-selection',
+    '/history',
+  ]
 
-  // If no session, only allow public routes
+  const requiresSession = (path: string) =>
+    sessionRequiredPrefixes.some((route) => path.startsWith(route))
+
+  const requiresVerifiedEmail = (path: string) =>
+    path.startsWith('/dashboard') || requiresSession(path)
+
   if (!session) {
-    if (protectedRoutes.some(route => pathname.startsWith(route))) {
-      return NextResponse.redirect(new URL('/signin', req.url))
+    if (requiresSession(pathname)) {
+      const signInUrl = new URL('/signin', req.url)
+      signInUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(signInUrl)
     }
     return supabaseResponse
   }
@@ -53,7 +66,6 @@ export async function middleware(req: NextRequest) {
     const emailConfirmed = !!session.user.email_confirmed_at
     const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
     const isConfirmEmailRoute = pathname.startsWith('/confirm-email')
-    const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
     // Email verification check (SECURITY CHECK - using session data, not database)
     if (!emailConfirmed) {
@@ -61,11 +73,9 @@ export async function middleware(req: NextRequest) {
       if (isConfirmEmailRoute || isAuthRoute) {
         return supabaseResponse
       }
-      // Redirect to email confirmation for protected routes
-      if (isProtectedRoute) {
+      if (requiresVerifiedEmail(pathname)) {
         return NextResponse.redirect(new URL(`/confirm-email?email=${encodeURIComponent(session.user.email || '')}`, req.url))
       }
-      // Allow other public routes
       return supabaseResponse
     }
 

@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore, useFriendsStore } from '@/lib/store'
+import { buildSignInPath } from '@/lib/auth-utils'
 import { useSports, useTeamSearch, type Team } from '@/hooks/queries/use-sports'
 import { useUpcomingMatches, type MatchWithTeams } from '@/hooks/queries/use-matches'
 import { usePlaceBetMutation } from '@/hooks/mutations/use-bet-mutations'
@@ -46,6 +48,8 @@ type Step = 'opponent' | 'sport' | 'fixture' | 'prediction' | 'stake' | 'confirm
 export function CreateChallengeDialog({ children, defaultOpponentId }: CreateChallengeDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [step, setStep] = useState<Step>('opponent')
+  const router = useRouter()
+  const pathname = usePathname()
   
   // Form data
   const [selectedOpponentId, setSelectedOpponentId] = useState(defaultOpponentId || '')
@@ -83,6 +87,11 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
   }, [isOpen, refreshFriends])
 
   const handleCreateChallenge = async () => {
+    if (!user) {
+      router.push(buildSignInPath(pathname))
+      return
+    }
+
     if (!selectedMatch || !amount || !minOpponentAmount) {
       toast.error('Please fill in all required fields')
       return
@@ -745,6 +754,10 @@ export function CreateChallengeDialog({ children, defaultOpponentId }: CreateCha
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
+      if (open && !user) {
+        router.push(buildSignInPath(pathname))
+        return
+      }
       setIsOpen(open)
       if (!open) resetForm()
     }}>

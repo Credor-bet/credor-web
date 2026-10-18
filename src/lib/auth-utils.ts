@@ -1,5 +1,21 @@
 import { supabase } from './supabase'
 
+export function getSafeRedirectPath(next: string | null | undefined): string {
+  if (!next || !next.startsWith('/') || next.startsWith('//')) {
+    return '/dashboard'
+  }
+  return next
+}
+
+export function buildSignInPath(returnTo?: string): string {
+  const fallback =
+    typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}`
+      : '/dashboard'
+  const path = returnTo ?? fallback
+  return `/signin?next=${encodeURIComponent(path)}`
+}
+
 /**
  * Find user email by username or email
  * @param identifier - Username or email

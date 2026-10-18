@@ -16,7 +16,7 @@ export default function DashboardPage() {
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | 'all'>('all')
   const router = useRouter()
 
-  const { data: user, isLoading: isUserLoading } = useCurrentUser()
+  const { data: user } = useCurrentUser()
   const { data: sports = [], isLoading: isSportsLoading } = useSports()
   const { data: leagues = [], isLoading: isLeaguesLoading } = useLeagues(
     selectedSportId === 'all' ? undefined : selectedSportId,
@@ -91,14 +91,6 @@ export default function DashboardPage() {
   useEffect(() => {
     setSelectedLeagueId('all')
   }, [selectedSportId])
-
-  if (isUserLoading) {
-    return (
-      <div className="md:ml-64 p-4 md:p-6 flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    )
-  }
 
   const renderTrendingCard = (bet: TrendingBet) => {
     const match = bet.match

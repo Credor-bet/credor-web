@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
+import { buildSignInPath } from '@/lib/auth-utils'
 import { useJoinBetMutation, useRejectBetMutation, useCancelBetMutation, useLeaveBetMutation } from '@/hooks/mutations'
 import type { Challenge, PredictionType } from '@/lib/challenge-service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -56,7 +58,16 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
   
   const [prediction, setPrediction] = useState<PredictionType>(getDefaultPrediction())
   
+  const router = useRouter()
   const { user, wallet } = useAuthStore()
+
+  const openAcceptDialog = () => {
+    if (!user) {
+      router.push(buildSignInPath(`/challenges/${challenge.id}`))
+      return
+    }
+    setShowAcceptDialog(true)
+  }
   
   // Mutation hooks
   const joinBetMutation = useJoinBetMutation()
@@ -406,12 +417,10 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
             <div className="flex gap-2 mt-3">
               {canAccept && (
                 <Dialog open={showAcceptDialog} onOpenChange={setShowAcceptDialog}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" className="flex-1">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Accept
-                    </Button>
-                  </DialogTrigger>
+                  <Button size="sm" className="flex-1" onClick={openAcceptDialog}>
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Accept
+                  </Button>
                   <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Accept Challenge</DialogTitle>
@@ -623,12 +632,10 @@ export function ChallengeCard({ challenge, variant = 'default', showActions = tr
           <div className="flex gap-2">
             {canAccept && (
               <Dialog open={showAcceptDialog} onOpenChange={setShowAcceptDialog}>
-                <DialogTrigger asChild>
-                  <Button className="flex-1">
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Accept Challenge
-                  </Button>
-                </DialogTrigger>
+                <Button className="flex-1" onClick={openAcceptDialog}>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Accept Challenge
+                </Button>
                 <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Accept Challenge</DialogTitle>

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { signInWithUsernameOrEmail } from '@/lib/auth-utils'
+import { getSafeRedirectPath, signInWithUsernameOrEmail } from '@/lib/auth-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,13 +12,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import { Lock, Eye, EyeOff, Loader2, User } from 'lucide-react'
 
-export default function SignInPage() {
+function SignInForm() {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectPath = getSafeRedirectPath(searchParams.get('next'))
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,21 +32,17 @@ export default function SignInPage() {
 
       if (!result.success) {
         if (result.needsConfirmation) {
-          // User needs to confirm their email
           setError('Please confirm your email address before signing in.')
-          // Redirect to confirmation page - middleware will handle routing
           router.push(`/confirm-email?email=${encodeURIComponent(result.email || '')}`)
         } else {
           setError(result.error || 'Sign in failed')
           setIsLoading(false)
         }
       } else {
-        // Successful sign in - redirect to dashboard
-        // Middleware will handle email verification checks and routing
-        router.push('/dashboard')
+        router.push(redirectPath)
       }
-    } catch (error) {
-      console.error('Sign in error:', error)
+    } catch (signInError) {
+      console.error('Sign in error:', signInError)
       setError('An unexpected error occurred')
       setIsLoading(false)
     }
@@ -55,20 +53,19 @@ export default function SignInPage() {
     setError('')
 
     try {
-      // Use environment-specific redirect URL
-      const redirectUrl = process.env.NODE_ENV === 'development' 
+      const redirectUrl = process.env.NODE_ENV === 'development'
         ? 'http://localhost:3000/auth/callback'
         : `${window.location.origin}/auth/callback`
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
         },
       })
 
-      if (error) {
-        setError(error.message)
+      if (oauthError) {
+        setError(oauthError.message)
         setIsLoading(false)
       }
     } catch {
@@ -103,7 +100,7 @@ export default function SignInPage() {
               />
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
@@ -189,7 +186,7 @@ export default function SignInPage() {
             Don&apos;t have an account? Sign up
           </Link>
         </div>
-        
+
         <div className="text-center text-sm">
           <Link href="/forgot-password" className="text-blue-600 hover:underline">
             Forgot your password?
@@ -198,4 +195,12 @@ export default function SignInPage() {
       </CardContent>
     </Card>
   )
-} 
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="w-full p-8 text-center text-sm text-muted-foreground">Loading...</div>}>
+      <SignInForm />
+    </Suspense>
+  )
+}

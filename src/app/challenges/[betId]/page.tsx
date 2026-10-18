@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
+import { buildSignInPath } from '@/lib/auth-utils'
 import { useBetDetailsQuery } from '@/hooks/queries/use-bet-details'
 import type { BetPredictionWithPrivacy } from '@/types/bets'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -104,6 +105,7 @@ interface BetWithDetails {
 export default function ChallengeDetailsPage() {
   const params = useParams()
   const router = useRouter()
+  const pathname = usePathname()
   const betId = params?.betId as string
 
   const [showParticipants, setShowParticipants] = useState(false)
@@ -593,8 +595,21 @@ export default function ChallengeDetailsPage() {
     bet?.creator_id === user?.id ? bet?.opponent?.username || 'Waiting for opponent' : originLabel
   
   // Handler functions
+  const openAcceptDialog = () => {
+    if (!user) {
+      router.push(buildSignInPath(pathname))
+      return
+    }
+    setShowAcceptDialog(true)
+  }
+
   const handleAcceptChallenge = async () => {
     if (!bet) return
+
+    if (!user) {
+      router.push(buildSignInPath(pathname))
+      return
+    }
     
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
       toast.error('Please enter a valid stake amount')
@@ -1171,7 +1186,7 @@ export default function ChallengeDetailsPage() {
                 <div className="flex flex-col gap-2">
                   {canAccept && (
                     <Button
-                      onClick={() => setShowAcceptDialog(true)}
+                      onClick={openAcceptDialog}
                       className="w-full justify-center"
                     >
                       <Target className="h-4 w-4 mr-2" />

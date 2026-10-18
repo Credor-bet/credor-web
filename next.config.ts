@@ -1,4 +1,5 @@
 import type { NextConfig } from "next"
+import withPWA from "next-pwa"
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -46,4 +47,36 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+// Wrap with PWA config
+const pwaConfig = withPWA({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === 'development', // Disable in dev for faster builds
+  runtimeCaching: [
+    {
+      urlPattern: /^https:\/\/apsxilfojvnxmmvxlkea\.supabase\.co\/.*/i,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'supabase-cache',
+        expiration: {
+          maxEntries: 50,
+          maxAgeSeconds: 60 * 60 * 24, // 24 hours
+        },
+      },
+    },
+    {
+      urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'image-cache',
+        expiration: {
+          maxEntries: 100,
+          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+        },
+      },
+    },
+  ],
+})
+
+export default pwaConfig(nextConfig)

@@ -74,6 +74,10 @@ export default function HomePage() {
     router.push('/signup')
   }
 
+  const handleExplore = () => {
+    router.push('/dashboard')
+  }
+
   // Show loading state while checking authentication
   if (isCheckingAuth) {
     return (
@@ -101,7 +105,14 @@ export default function HomePage() {
         {/* Header */}
         <header className="flex justify-between items-center p-6">
           <div className="text-white text-2xl font-bold font-dm-sans text-shadow-sm">Credor</div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3 justify-end">
+            <Button
+              variant="ghost"
+              className="text-white hover:bg-white/10 border border-white/20 font-dm-sans backdrop-blur-custom"
+              onClick={handleExplore}
+            >
+              Explore
+            </Button>
             <Button 
               variant="ghost" 
               className="text-white hover:bg-white/10 border border-white/20 font-dm-sans backdrop-blur-custom"
@@ -135,6 +146,14 @@ export default function HomePage() {
 
               {/* CTA buttons */}
               <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full sm:w-auto px-12 py-6 text-lg font-semibold bg-black/20 border-2 border-white/60 text-white hover:bg-black/40 hover:border-white/80 font-dm-sans backdrop-blur-custom transition-all duration-300"
+                  onClick={handleExplore}
+                >
+                  Explore
+                </Button>
                 <Button 
                   size="lg"
                   variant="outline"
